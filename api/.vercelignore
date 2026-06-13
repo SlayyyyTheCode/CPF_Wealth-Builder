@@ -1,0 +1,9 @@
+# Never ship local dev artifacts to the serverless deploy.
+.env
+*.sqlite3
+*.sqlite
+.venv/
+__pycache__/
+.pytest_cache/
+tests/
+_*.py

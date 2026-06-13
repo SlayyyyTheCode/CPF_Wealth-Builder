@@ -1,4 +1,6 @@
-from pydantic import field_validator
+import os
+
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +33,20 @@ class Settings(BaseSettings):
         if v.startswith("postgresql://"):
             v = "postgresql+psycopg://" + v[len("postgresql://"):]
         return v
+
+    @model_validator(mode="after")
+    def _db_from_managed_env(self):
+        # Managed Postgres add-ons (Vercel/Neon) inject POSTGRES_URL rather than
+        # DATABASE_URL. If DATABASE_URL is unset/localhost default, adopt theirs.
+        if not self.DATABASE_URL or "localhost" in self.DATABASE_URL:
+            alt = (
+                os.getenv("POSTGRES_URL")
+                or os.getenv("POSTGRES_PRISMA_URL")
+                or os.getenv("DATABASE_URL_UNPOOLED")
+            )
+            if alt:
+                object.__setattr__(self, "DATABASE_URL", self._use_psycopg3_driver(alt))
+        return self
 
     @property
     def cors_list(self) -> list[str]:
