@@ -24,3 +24,6 @@ caveman/
 docs/superpowers/
 claude.md.txt
 *.original.md
+
+# Internal reference assets (design refs, source illustrations) — not shipped
+CPF_Information/
