@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: cpf
+      POSTGRES_PASSWORD: cpf
+      POSTGRES_DB: cpf
+    ports:
+      - "5432:5432"
+    volumes:
+      - cpf_pgdata:/var/lib/postgresql/data
+volumes:
+  cpf_pgdata:

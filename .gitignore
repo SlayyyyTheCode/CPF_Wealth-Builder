@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.env
+
+# Node
+node_modules/
+.next/
+out/
+.env.local
+
+# DB / misc
+*.sqlite3
+.DS_Store
+
+# Claude Code / skills / internal tooling — not part of the app
+.superpowers/
+.claude/
+caveman/
+docs/superpowers/
+claude.md.txt
+*.original.md
