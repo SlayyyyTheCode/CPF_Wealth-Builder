@@ -3,11 +3,12 @@ import { use, useEffect, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
-import { simulate } from "@/lib/api";
-import type { SimResult, YearRow } from "@/lib/types";
+import { simulate, getMember, getActivePolicy } from "@/lib/api";
+import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, OrdinaryIcon, HousingIcon, RocketIcon } from "@/components/icons";
 import { sgd } from "@/lib/format";
+import { monthlyContribution } from "@/lib/cpf";
 
 // OA base interest floor.
 const OA_RATE = 0.025;
@@ -28,24 +29,29 @@ export default function OaPage({
 }) {
   const { id } = use(params);
   const [res, setRes] = useState<SimResult | null>(null);
+  const [member, setMember] = useState<Member | null>(null);
+  const [owCeiling, setOwCeiling] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
 
-  // Housing-withdrawal calculator state
-  const [oaNow, setOaNow] = useState(0);          // current OA balance
-  const [withdraw, setWithdraw] = useState(0);     // amount drawn now (housing)
+  // Housing-withdrawal calculator state (monthly mortgage draw)
+  const [oaNow, setOaNow] = useState(0);            // current OA balance
+  const [withdrawMth, setWithdrawMth] = useState(0); // monthly amount drawn (housing)
   const [drawYears, setDrawYears] = useState(10);
+  const [drawMonths, setDrawMonths] = useState(0);
   const [drawRate, setDrawRate] = useState(OA_RATE * 100);
   const [drawResult, setDrawResult] = useState<
     {
-      after: number;
       projected: number;
+      withdrawn: number;
       interest: number;
+      months: number;
       series: { age: number; oa: number; oaAfter: number | null }[];
     } | null
   >(null);
 
-  // Top-up what-if (yearly OA voluntary contribution)
+  // Top-up what-if (yearly OA voluntary contribution from a chosen age)
   const [topup, setTopup] = useState<number>(0);
+  const [topupAge, setTopupAge] = useState<number>(0);
   const [wiData, setWiData] = useState<
     { age: number; baseline: number; withTopup: number }[] | null
   >(null);
@@ -55,13 +61,21 @@ export default function OaPage({
 
   useEffect(() => {
     let ok = true;
-    simulate(Number(id), 91)
-      .then((r) => {
+    const numId = Number(id);
+    Promise.all([
+      simulate(numId, 91),
+      getMember(numId),
+      getActivePolicy(new Date().getFullYear()),
+    ])
+      .then(([r, m, policy]) => {
         if (!ok) return;
         setRes(r.result);
+        setMember(m);
+        setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
         if (r.result.years.length > 0) {
           setAge(r.result.years[0].age);
           setOaNow(Math.round(r.result.years[0].closing.OA));
+          setTopupAge(r.result.years[0].age);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -77,7 +91,7 @@ export default function OaPage({
       </p>
     );
 
-  if (!res || age === null)
+  if (!res || !member || age === null)
     return (
       <div className="space-y-3">
         <div className="h-8 w-40 animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
@@ -107,29 +121,48 @@ export default function OaPage({
   const oaIntoRa =
     oa54 !== null && oa55 !== null ? Math.max(oa54 - oa55, 0) : null;
 
-  // Housing-withdrawal calculator — committed on "Calculate"
+  // OA contribution from wage (employee + employer) at the selected year's age.
+  const oaMonthlyIn = monthlyContribution(member.monthly_gross_wage, age, "OA", owCeiling);
+  const oaAnnualIn = oaMonthlyIn * 12;
+  const cappedWage = Math.min(member.monthly_gross_wage, owCeiling > 0 ? owCeiling : member.monthly_gross_wage);
+
+  // Housing-withdrawal calculator — monthly mortgage draw, compounded monthly.
   function calcWithdrawal() {
-    const r = drawRate / 100;
-    const after = Math.max(oaNow - withdraw, 0);
-    const projected = after * (1 + r) ** drawYears;
+    const rm = drawRate / 100 / 12;
+    const months = Math.max(drawYears * 12 + drawMonths, 0);
     const startAge = years[0].age;
+    let bal = oaNow;
+    let withdrawn = 0;
+    const byAge: Record<number, number> = { [startAge]: Math.round(bal) };
+    for (let m = 1; m <= months; m++) {
+      bal = bal * (1 + rm);
+      const w = Math.min(withdrawMth, bal);
+      bal -= w;
+      withdrawn += w;
+      if (m % 12 === 0) byAge[startAge + m / 12] = Math.round(bal);
+    }
+    byAge[startAge + Math.ceil(months / 12)] = Math.round(bal); // final partial year
     const series = years.map((y) => ({
       age: y.age,
       oa: Math.round(y.closing.OA),
-      oaAfter:
-        y.age >= startAge && y.age <= startAge + drawYears
-          ? Math.round(after * (1 + r) ** (y.age - startAge))
-          : null,
+      oaAfter: y.age in byAge ? byAge[y.age] : null,
     }));
-    setDrawResult({ after, projected, interest: projected - after, series });
+    setDrawResult({
+      projected: bal,
+      withdrawn,
+      interest: bal + withdrawn - oaNow,
+      months,
+      series,
+    });
   }
 
-  // Yearly OA top-up compounded at the OA floor rate (~2.5%/yr). Estimate layered
-  // on the baseline projection (value after k years = topup * ((1+r)^k - 1)/r).
+  // Yearly OA top-up from a chosen age, compounded at the OA floor (~2.5%/yr).
+  // Estimate layered on the baseline projection; FV after k top-ups =
+  // topup * ((1+r)^k - 1)/r where k = years since the chosen start age.
   function runWhatIf() {
-    const data = years.map((y, i) => {
-      const k = i + 1;
-      const fv = topup > 0 ? topup * (((1 + OA_RATE) ** k - 1) / OA_RATE) : 0;
+    const data = years.map((y) => {
+      const k = y.age - topupAge + 1; // number of yearly top-ups made by this age
+      const fv = topup > 0 && k > 0 ? topup * (((1 + OA_RATE) ** k - 1) / OA_RATE) : 0;
       return {
         age: y.age,
         baseline: Math.round(y.closing.OA),
@@ -191,6 +224,34 @@ export default function OaPage({
           </div>
         </div>
       )}
+
+      {/* 3b. OA contribution from wage */}
+      <div className={`${cardClass} mb-4`}>
+        <h3 className={`${labelClass} mb-3`}>OA contribution from salary (age {age})</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Gross wage / mth</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(member.monthly_gross_wage)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">CPF-able wage / mth</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(cappedWage)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Into OA / mth</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(oaMonthlyIn)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Into OA / yr</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(oaAnnualIn)}</p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-[var(--color-muted)]">
+          Employee + employer contribution flowing to OA at this age, on wage capped at the Ordinary
+          Wage ceiling ({sgd(owCeiling)}/mth). Indicative allocation; the projection applies exact
+          policy rates.
+        </p>
+      </div>
 
       {/* 4. Extra-interest explainer */}
       <div className={`${cardClass} mb-4`}>
@@ -283,7 +344,7 @@ export default function OaPage({
           <HousingIcon className="h-5 w-5" />
           OA housing-withdrawal calculator
         </h3>
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <div>
             <label htmlFor="oa-now" className="mb-1 block text-sm text-[var(--color-muted)]">
               Current OA balance (S$)
@@ -301,17 +362,17 @@ export default function OaPage({
           </div>
           <div>
             <label htmlFor="oa-withdraw" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Withdraw for housing (S$)
+              Withdraw for housing (S$/mth)
             </label>
             <input
               id="oa-withdraw"
               type="number"
               min={0}
-              step={100}
-              value={withdraw}
-              onChange={(e) => setWithdraw(Math.max(0, Number(e.target.value)))}
+              step={50}
+              value={withdrawMth}
+              onChange={(e) => setWithdrawMth(Math.max(0, Number(e.target.value)))}
               className={inputClass}
-              aria-label="Amount withdrawn from OA for housing now"
+              aria-label="Monthly amount withdrawn from OA for housing"
             />
           </div>
           <div>
@@ -321,13 +382,29 @@ export default function OaPage({
             <input
               id="oa-draw-years"
               type="number"
-              min={1}
+              min={0}
               max={50}
               step={1}
               value={drawYears}
-              onChange={(e) => setDrawYears(Math.max(1, Math.min(50, Number(e.target.value))))}
+              onChange={(e) => setDrawYears(Math.max(0, Math.min(50, Number(e.target.value))))}
               className={inputClass}
-              aria-label="Number of years to project"
+              aria-label="Number of whole years to project"
+            />
+          </div>
+          <div>
+            <label htmlFor="oa-draw-months" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Months
+            </label>
+            <input
+              id="oa-draw-months"
+              type="number"
+              min={0}
+              max={11}
+              step={1}
+              value={drawMonths}
+              onChange={(e) => setDrawMonths(Math.max(0, Math.min(11, Number(e.target.value))))}
+              className={inputClass}
+              aria-label="Additional months to project"
             />
           </div>
           <div>
@@ -362,13 +439,12 @@ export default function OaPage({
             className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
           >
             <div>
-              <p className="text-xs text-[var(--color-muted)]">OA after withdrawal</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.after)}</p>
+              <p className="text-xs text-[var(--color-muted)]">Total withdrawn for housing</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.withdrawn)}</p>
+              <p className="text-xs text-[var(--color-muted)]">over {drawResult.months} mth{drawResult.months === 1 ? "" : "s"}</p>
             </div>
             <div>
-              <p className="text-xs text-[var(--color-muted)]">
-                Projected OA after {drawYears} yr{drawYears > 1 ? "s" : ""}
-              </p>
+              <p className="text-xs text-[var(--color-muted)]">Projected OA at end</p>
               <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.projected)}</p>
             </div>
             <div>
@@ -415,15 +491,16 @@ export default function OaPage({
         )}
 
         <p className="mt-2 text-xs text-[var(--color-muted)]">
-          Projects your OA after deducting a housing withdrawal, compounding the remainder at the rate
-          above. Prefilled with the current OA balance — edit any field, then Calculate.
+          Draws the monthly housing amount from the OA each month, compounding the remaining balance
+          monthly at the rate above over the chosen years and months. Prefilled with the current OA
+          balance — edit any field, then Calculate.
         </p>
       </div>
 
       {/* 8. Top-up what-if calculator */}
       <div className={`${cardClass} mb-4`}>
         <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label htmlFor="oa-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
               Yearly OA top-up (S$)
@@ -437,6 +514,22 @@ export default function OaPage({
               onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Yearly OA top-up amount in Singapore dollars"
+            />
+          </div>
+          <div>
+            <label htmlFor="oa-topup-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Start at age
+            </label>
+            <input
+              id="oa-topup-age"
+              type="number"
+              min={ages[0]}
+              max={ages[ages.length - 1]}
+              step={1}
+              value={topupAge}
+              onChange={(e) => setTopupAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              className={inputClass}
+              aria-label="Age at which yearly top-ups begin"
             />
           </div>
           <div className="flex items-end">
@@ -506,8 +599,8 @@ export default function OaPage({
         )}
 
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Estimate: each year&apos;s voluntary OA top-up is compounded at the 2.5% OA floor rate and
-          added to the projected balance.
+          Estimate: starting at the chosen age, each year&apos;s voluntary OA top-up is compounded at
+          the 2.5% OA floor rate and added to the projected balance.
         </p>
       </div>
 

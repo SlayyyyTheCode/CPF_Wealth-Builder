@@ -3,13 +3,17 @@ import { use, useEffect, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { simulate } from "@/lib/api";
-import type { SimResult } from "@/lib/types";
+import { simulate, getMember, getActivePolicy } from "@/lib/api";
+import type { SimResult, Member } from "@/lib/types";
 import { MaBhsChart } from "@/components/ma-bhs-chart";
 import { MedisaveAdequacy } from "@/components/medisave-adequacy";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
 import { sgd } from "@/lib/format";
+import { monthlyContribution } from "@/lib/cpf";
+
+// MA earns the 4% floor rate.
+const MA_RATE = 0.04;
 
 export default function MedisavePage({
   params,
@@ -18,7 +22,16 @@ export default function MedisavePage({
 }) {
   const { id } = use(params);
   const [res, setRes] = useState<SimResult | null>(null);
+  const [member, setMember] = useState<Member | null>(null);
+  const [owCeiling, setOwCeiling] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
+
+  // Top-up what-if (yearly MA voluntary contribution from a chosen age)
+  const [topup, setTopup] = useState<number>(0);
+  const [topupAge, setTopupAge] = useState<number>(0);
+  const [wiData, setWiData] = useState<
+    { age: number; baseline: number; withTopup: number; bhs: number }[] | null
+  >(null);
 
   // Insurance drawdown calculator state
   const [maNow, setMaNow] = useState(0);          // current MA balance
@@ -39,13 +52,21 @@ export default function MedisavePage({
 
   useEffect(() => {
     let ok = true;
-    simulate(Number(id), 91)
-      .then((r) => {
+    const numId = Number(id);
+    Promise.all([
+      simulate(numId, 91),
+      getMember(numId),
+      getActivePolicy(new Date().getFullYear()),
+    ])
+      .then(([r, m, policy]) => {
         if (!ok) return;
         setRes(r.result);
+        setMember(m);
+        setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
         if (r.result.years.length > 0) {
           setAge(r.result.years[0].age);
           setMaNow(Math.round(r.result.years[0].closing.MA));
+          setTopupAge(r.result.years[0].age);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -61,7 +82,7 @@ export default function MedisavePage({
       </p>
     );
 
-  if (!res || age === null)
+  if (!res || !member || age === null)
     return (
       <div className="space-y-3">
         <div className="h-8 w-40 animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
@@ -125,6 +146,32 @@ export default function MedisavePage({
     setDrawResult({ after, projected, interest: projected - after, series });
   }
 
+  // MA contribution from wage (employee + employer) at the selected year's age.
+  const maMonthlyIn = monthlyContribution(member.monthly_gross_wage, age, "MA", owCeiling);
+  const maAnnualIn = maMonthlyIn * 12;
+  const cappedWage = Math.min(
+    member.monthly_gross_wage,
+    owCeiling > 0 ? owCeiling : member.monthly_gross_wage,
+  );
+
+  // Yearly MA top-up from a chosen age, compounded at the MA floor (4%/yr).
+  // FV after k top-ups = topup * ((1+r)^k - 1)/r, k = years since the start age.
+  function runWhatIf() {
+    if (!medisave) return;
+    const data = years.map((y) => {
+      const k = y.age - topupAge + 1;
+      const fv = topup > 0 && k > 0 ? topup * (((1 + MA_RATE) ** k - 1) / MA_RATE) : 0;
+      const s = medisave.series.find((p) => p.age === y.age);
+      return {
+        age: y.age,
+        baseline: Math.round(y.closing.MA),
+        withTopup: Math.round(y.closing.MA + fv),
+        bhs: Math.round(s?.bhs ?? 0),
+      };
+    });
+    setWiData(data);
+  }
+
   // Premium table — sampled every 10 years
   const premiumRows = medisave.premiums.filter((p) => p.age % 10 === 0);
 
@@ -185,6 +232,34 @@ export default function MedisavePage({
           </div>
         </div>
       )}
+
+      {/* 3b. MA contribution from wage */}
+      <div className={`${cardClass} mb-4`}>
+        <h3 className={`${labelClass} mb-3`}>MA contribution from salary (age {age})</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Gross wage / mth</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(member.monthly_gross_wage)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">CPF-able wage / mth</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(cappedWage)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Into MA / mth</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(maMonthlyIn)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Into MA / yr</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(maAnnualIn)}</p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-[var(--color-muted)]">
+          Employee + employer contribution flowing to MA at this age, on wage capped at the Ordinary
+          Wage ceiling ({sgd(owCeiling)}/mth). MA inflow stops once the BHS is reached and overflows
+          out. Indicative allocation; the projection applies exact policy rates.
+        </p>
+      </div>
 
       {/* 4. MA overflow card */}
       <div className={`${cardClass} mb-4`}>
@@ -375,6 +450,115 @@ export default function MedisavePage({
 
         <p className="mt-2 text-xs text-[var(--color-muted)]">
           Projects your MediSave after deducting the withdrawal, compounding the remainder at the rate above. Prefilled with the current MA balance — edit any field, then Calculate.
+        </p>
+      </div>
+
+      {/* 8. Top-up what-if calculator */}
+      <div className={`${cardClass} mb-4`}>
+        <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label htmlFor="ma-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Yearly MA top-up (S$)
+            </label>
+            <input
+              id="ma-topup"
+              type="number"
+              min={0}
+              step={1000}
+              value={topup}
+              onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
+              className={inputClass}
+              aria-label="Yearly MA top-up amount in Singapore dollars"
+            />
+          </div>
+          <div>
+            <label htmlFor="ma-topup-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Start at age
+            </label>
+            <input
+              id="ma-topup-age"
+              type="number"
+              min={ages[0]}
+              max={ages[ages.length - 1]}
+              step={1}
+              value={topupAge}
+              onChange={(e) => setTopupAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              className={inputClass}
+              aria-label="Age at which yearly top-ups begin"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={runWhatIf}
+              className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
+              aria-label="Recalculate with yearly top-up"
+            >
+              Recalculate
+            </button>
+          </div>
+        </div>
+
+        {wiData && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-2"
+          >
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Final MA (baseline)</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">
+                {sgd(wiData[wiData.length - 1].baseline)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Final MA (with top-up)</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                {sgd(wiData[wiData.length - 1].withTopup)}
+              </p>
+              <p className="text-xs text-[var(--color-primary)]">
+                +{sgd(wiData[wiData.length - 1].withTopup - wiData[wiData.length - 1].baseline)} delta
+              </p>
+            </div>
+          </div>
+        )}
+
+        {wiData && (
+          <div
+            role="img"
+            aria-label="Projected MA balance: baseline versus with yearly top-up, against BHS"
+            className="mt-4 h-64"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={wiData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                <YAxis
+                  tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                  tick={{ fontSize: 11, fill: "var(--color-muted)" }}
+                  width={52}
+                />
+                <Tooltip
+                  formatter={(v, name) => [
+                    sgd(typeof v === "number" ? v : null),
+                    name === "baseline" ? "Baseline" : name === "withTopup" ? "With yearly top-up" : "BHS",
+                  ]}
+                  labelFormatter={(a) => `Age ${a}`}
+                  contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
+                />
+                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With yearly top-up" : "BHS")} wrapperStyle={{ fontSize: "12px" }} />
+                <Line type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="withTopup" stroke="var(--chart-2)" strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="bhs" stroke="var(--chart-grey)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        <p className="mt-3 text-xs text-[var(--color-muted)]">
+          Estimate: starting at the chosen age, each year&apos;s voluntary MA top-up is compounded at
+          the 4% MA floor rate and added to the projected balance. MA top-ups are only accepted up to
+          the prevailing BHS.
         </p>
       </div>
 

@@ -49,6 +49,7 @@ export default function SaPage({
 
   // Top-up what-if (yearly) — computed client-side
   const [topup, setTopup] = useState<number>(0);
+  const [topupAge, setTopupAge] = useState<number>(0);
   const [wiData, setWiData] = useState<
     { age: number; baseline: number; withTopup: number; frsLine: number }[] | null
   >(null);
@@ -72,6 +73,7 @@ export default function SaPage({
         setBaseYear(Number(policy.effective_year) || new Date().getFullYear());
         if (simRun.result.years.length > 0) {
           setAge(simRun.result.years[0].age);
+          setTopupAge(simRun.result.years[0].age);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -156,9 +158,9 @@ export default function SaPage({
   // on the baseline projection.
   const SA_RATE = 0.04;
   function runWhatIf() {
-    const data = years.map((y, i) => {
-      const k = i + 1;
-      const fv = topup > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
+    const data = years.map((y) => {
+      const k = y.age - topupAge + 1; // yearly top-ups made by this age
+      const fv = topup > 0 && k > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
       return {
         age: y.age,
         baseline: retBal(y),
@@ -393,7 +395,7 @@ export default function SaPage({
       {/* 7. Top-up what-if calculator */}
       <div className={`${cardClass} mb-4`}>
         <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label
               htmlFor="sa-topup"
@@ -410,6 +412,25 @@ export default function SaPage({
               onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Yearly SA top-up amount in Singapore dollars"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="sa-topup-age"
+              className="mb-1 block text-sm text-[var(--color-muted)]"
+            >
+              Start at age
+            </label>
+            <input
+              id="sa-topup-age"
+              type="number"
+              min={ages[0]}
+              max={ages[ages.length - 1]}
+              step={1}
+              value={topupAge}
+              onChange={(e) => setTopupAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              className={inputClass}
+              aria-label="Age at which yearly top-ups begin"
             />
           </div>
           <div className="flex items-end">
@@ -514,7 +535,7 @@ export default function SaPage({
         )}
 
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Estimate: each year&apos;s top-up is compounded at the ~4% SA floor rate and added to the projected balance. Top-ups are only allowed until the FRS is reached.
+          Estimate: starting at the chosen age, each year&apos;s top-up is compounded at the ~4% SA floor rate and added to the projected balance. Top-ups are only allowed until the FRS is reached.
         </p>
       </div>
     </>
