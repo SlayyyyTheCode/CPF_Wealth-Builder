@@ -18,9 +18,13 @@ export default function MedisavePage({
   const [err, setErr] = useState<string | null>(null);
 
   // Insurance drawdown calculator state
-  const [drawAnnual, setDrawAnnual] = useState(0);
+  const [maNow, setMaNow] = useState(0);          // current MA balance
+  const [withdraw, setWithdraw] = useState(0);     // amount drawn now
   const [drawYears, setDrawYears] = useState(10);
   const [drawRate, setDrawRate] = useState(4);
+  const [drawResult, setDrawResult] = useState<
+    { after: number; projected: number; interest: number } | null
+  >(null);
 
   // Scrubber state
   const [age, setAge] = useState<number | null>(null);
@@ -33,6 +37,7 @@ export default function MedisavePage({
         setRes(r.result);
         if (r.result.years.length > 0) {
           setAge(r.result.years[0].age);
+          setMaNow(Math.round(r.result.years[0].closing.MA));
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -93,14 +98,13 @@ export default function MedisavePage({
   const totalOverflow = maToSa + maToOa + maToRa;
   const hasOverflow = totalOverflow > 0;
 
-  // Insurance drawdown calculator
-  const r = drawRate / 100;
-  const drawn = drawAnnual * drawYears;
-  const fv =
-    r === 0
-      ? drawn
-      : drawAnnual * (((1 + r) ** drawYears - 1) / r);
-  const lostCompounding = fv - drawn;
+  // Insurance drawdown calculator — committed on "Calculate"
+  function calcDrawdown() {
+    const r = drawRate / 100;
+    const after = Math.max(maNow - withdraw, 0);
+    const projected = after * (1 + r) ** drawYears;
+    setDrawResult({ after, projected, interest: projected - after });
+  }
 
   // Premium table — sampled every 10 years
   const premiumRows = medisave.premiums.filter((p) => p.age % 10 === 0);
@@ -215,30 +219,39 @@ export default function MedisavePage({
           <MedisaveIcon className="h-5 w-5" />
           MediSave insurance drawdown
         </h3>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           <div>
-            <label
-              htmlFor="draw-annual"
-              className="mb-1 block text-sm text-[var(--color-muted)]"
-            >
-              Annual amount drawn from MA (S$)
+            <label htmlFor="ma-now" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Current MA balance (S$)
             </label>
             <input
-              id="draw-annual"
+              id="ma-now"
               type="number"
               min={0}
               step={100}
-              value={drawAnnual}
-              onChange={(e) => setDrawAnnual(Math.max(0, Number(e.target.value)))}
+              value={maNow}
+              onChange={(e) => setMaNow(Math.max(0, Number(e.target.value)))}
               className={inputClass}
-              aria-label="Annual amount drawn from MediSave in Singapore dollars"
+              aria-label="Current MediSave balance"
             />
           </div>
           <div>
-            <label
-              htmlFor="draw-years"
-              className="mb-1 block text-sm text-[var(--color-muted)]"
-            >
+            <label htmlFor="ma-withdraw" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Withdraw from MA now (S$)
+            </label>
+            <input
+              id="ma-withdraw"
+              type="number"
+              min={0}
+              step={100}
+              value={withdraw}
+              onChange={(e) => setWithdraw(Math.max(0, Number(e.target.value)))}
+              className={inputClass}
+              aria-label="Amount withdrawn from MediSave now"
+            />
+          </div>
+          <div>
+            <label htmlFor="draw-years" className="mb-1 block text-sm text-[var(--color-muted)]">
               Years
             </label>
             <input
@@ -248,19 +261,14 @@ export default function MedisavePage({
               max={50}
               step={1}
               value={drawYears}
-              onChange={(e) =>
-                setDrawYears(Math.max(1, Math.min(50, Number(e.target.value))))
-              }
+              onChange={(e) => setDrawYears(Math.max(1, Math.min(50, Number(e.target.value))))}
               className={inputClass}
-              aria-label="Number of years for drawdown"
+              aria-label="Number of years to project"
             />
           </div>
           <div>
-            <label
-              htmlFor="draw-rate"
-              className="mb-1 block text-sm text-[var(--color-muted)]"
-            >
-              Annual MA interest rate (%)
+            <label htmlFor="draw-rate" className="mb-1 block text-sm text-[var(--color-muted)]">
+              MA interest rate (%)
             </label>
             <input
               id="draw-rate"
@@ -269,37 +277,46 @@ export default function MedisavePage({
               max={20}
               step={0.1}
               value={drawRate}
-              onChange={(e) =>
-                setDrawRate(Math.max(0, Math.min(20, Number(e.target.value))))
-              }
+              onChange={(e) => setDrawRate(Math.max(0, Math.min(20, Number(e.target.value))))}
               className={inputClass}
               aria-label="Annual MediSave interest rate in percent"
             />
           </div>
         </div>
 
-        <div
-          role="status"
-          aria-live="polite"
-          className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
+        <button
+          onClick={calcDrawdown}
+          className="mt-4 rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary-hover)]"
         >
-          <div>
-            <p className="text-xs text-[var(--color-muted)]">Total drawn</p>
-            <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawn)}</p>
+          Calculate
+        </button>
+
+        {drawResult && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
+          >
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">MA after withdrawal</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.after)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">
+                Projected MA after {drawYears} yr{drawYears > 1 ? "s" : ""}
+              </p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.projected)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">MA interest earned</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                {sgd(drawResult.interest)}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-[var(--color-muted)]">Value if left in MA</p>
-            <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(fv)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-[var(--color-muted)]">Lost compounding</p>
-            <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
-              {sgd(lostCompounding)}
-            </p>
-          </div>
-        </div>
+        )}
         <p className="mt-2 text-xs text-[var(--color-muted)]">
-          Lost compounding = future value of those drawdowns had they remained in MediSave at the specified rate.
+          Projects your MediSave after deducting the withdrawal, compounding the remainder at the rate above. Prefilled with the current MA balance — edit any field, then Calculate.
         </p>
       </div>
 

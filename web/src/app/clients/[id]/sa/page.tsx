@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { simulate, simulateWhatIf, getMember, getActivePolicy } from "@/lib/api";
+import { simulate, getMember, getActivePolicy } from "@/lib/api";
 import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
@@ -52,11 +52,11 @@ export default function SaPage({
   // Scrubber
   const [age, setAge] = useState<number | null>(null);
 
-  // Top-up what-if
+  // Top-up what-if (yearly) — computed client-side
   const [topup, setTopup] = useState<number>(0);
-  const [wiLoading, setWiLoading] = useState(false);
-  const [wiRes, setWiRes] = useState<SimResult | null>(null);
-  const [wiErr, setWiErr] = useState<string | null>(null);
+  const [wiData, setWiData] = useState<
+    { age: number; baseline: number; withTopup: number }[] | null
+  >(null);
 
   useEffect(() => {
     let ok = true;
@@ -128,11 +128,9 @@ export default function SaPage({
   // Baseline FRS-hit age
   const baseFrsAge = frsHitAge(years, frs);
 
-  // What-if derived
-  const wiYears = wiRes?.years ?? [];
-  const wiFrsAge = wiRes ? frsHitAge(wiYears, frs) : null;
-  const wiFinalBal =
-    wiYears.length > 0 ? retBal(wiYears[wiYears.length - 1]) : null;
+  // What-if derived (yearly top-up estimate)
+  const wiFrsAge = wiData ? (wiData.find((d) => d.withTopup >= frs)?.age ?? null) : null;
+  const wiFinalBal = wiData ? wiData[wiData.length - 1].withTopup : null;
   const baseFinalBal =
     years.length > 0 ? retBal(years[years.length - 1]) : null;
 
@@ -148,25 +146,17 @@ export default function SaPage({
 
   // ── handlers ───────────────────────────────────────────────────────────────
 
-  async function runWhatIf() {
-    setWiLoading(true);
-    setWiErr(null);
-    setWiRes(null);
-    try {
-      const run = await simulateWhatIf(Number(id), {
-        end_age: 91,
-        persist: false,
-        override_balances: {
-          ...member!.balances,
-          SA: member!.balances.SA + topup,
-        },
-      });
-      setWiRes(run.result);
-    } catch (e) {
-      setWiErr((e as Error).message);
-    } finally {
-      setWiLoading(false);
-    }
+  // Yearly SA top-up, compounded at the SA floor rate (~4%/yr). Each year adds
+  // `topup`; value after k years = topup * (((1+r)^k - 1)/r). Estimate layered
+  // on the baseline projection.
+  const SA_RATE = 0.04;
+  function runWhatIf() {
+    const data = years.map((y, i) => {
+      const k = i + 1;
+      const fv = topup > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
+      return { age: y.age, baseline: retBal(y), withTopup: retBal(y) + fv };
+    });
+    setWiData(data);
   }
 
   // ── render ─────────────────────────────────────────────────────────────────
@@ -395,7 +385,7 @@ export default function SaPage({
               htmlFor="sa-topup"
               className="mb-1 block text-sm text-[var(--color-muted)]"
             >
-              One-time SA top-up (S$)
+              Yearly SA top-up (S$)
             </label>
             <input
               id="sa-topup"
@@ -405,28 +395,21 @@ export default function SaPage({
               value={topup}
               onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
               className={inputClass}
-              aria-label="One-time SA top-up amount in Singapore dollars"
+              aria-label="Yearly SA top-up amount in Singapore dollars"
             />
           </div>
           <div className="flex items-end">
             <button
               onClick={runWhatIf}
-              disabled={wiLoading}
-              className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              aria-label="Recalculate with top-up"
+              className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
+              aria-label="Recalculate with yearly top-up"
             >
-              {wiLoading ? "Calculating…" : "Recalculate"}
+              Recalculate
             </button>
           </div>
         </div>
 
-        {wiErr && (
-          <p role="alert" className="mt-3 text-sm text-[var(--color-error)]">
-            Error: {wiErr}
-          </p>
-        )}
-
-        {wiRes && (
+        {wiData && (
           <div
             role="status"
             aria-live="polite"
@@ -484,9 +467,37 @@ export default function SaPage({
           </div>
         )}
 
+        {wiData && (
+          <div
+            role="img"
+            aria-label="Projected SA/RA balance: baseline versus with yearly top-up"
+            className="mt-4 h-64"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={wiData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                <YAxis
+                  tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                  tick={{ fontSize: 11, fill: "var(--color-muted)" }}
+                  width={52}
+                />
+                <Tooltip
+                  formatter={(v, name) => [sgd(typeof v === "number" ? v : null), name === "baseline" ? "Baseline" : "With yearly top-up"]}
+                  labelFormatter={(a) => `Age ${a}`}
+                  contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
+                />
+                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : "With yearly top-up")} wrapperStyle={{ fontSize: "12px" }} />
+                <Line type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+                <ReferenceLine y={frs} stroke="var(--chart-3)" strokeDasharray="6 3" label={{ value: "FRS", position: "right", fontSize: 10 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          The what-if run is non-persisted — it does not update your saved
-          simulation.
+          Estimate: each year&apos;s top-up is compounded at the ~4% SA floor rate and added to the projected balance. Top-ups are only allowed until the FRS is reached.
         </p>
       </div>
     </>

@@ -3,6 +3,8 @@ import { use, useEffect, useState } from "react";
 import { getMember, updateMember } from "@/lib/api";
 import type { Member, MemberUpdate } from "@/lib/types";
 import { PageHeading, SettingsIcon } from "@/components/icons";
+import { AdminBar } from "@/components/admin-bar";
+import { useAdmin } from "@/lib/admin";
 
 export default function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -22,6 +24,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
+  const { isAdmin, login, logout } = useAdmin();
 
   useEffect(() => {
     let ok = true;
@@ -97,6 +100,13 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         title="Settings"
         subtitle="Edit this client's CPF balances and profile. Changes affect all projections."
       />
+
+      <AdminBar isAdmin={isAdmin} onLogin={login} onLogout={logout} />
+      {!isAdmin && (
+        <p className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm text-[var(--color-muted)]">
+          Sign in as administrator to edit and save changes.
+        </p>
+      )}
 
       <form onSubmit={handleSave} className="grid gap-4 lg:grid-cols-2">
         {/* Profile card */}
@@ -223,7 +233,8 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         <div className="lg:col-span-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || !isAdmin}
+            title={!isAdmin ? "Administrator sign-in required" : undefined}
             className="rounded-full bg-[var(--color-primary)] px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-opacity"
           >
             {busy ? "Saving…" : "Save changes"}
