@@ -206,3 +206,5 @@ npx tsc --noEmit && npm run build
 ## 📄 License
 
 No license specified yet — all rights reserved by the author until one is added.
+
+<!-- auto-deploy enabled via Vercel Git integration -->
