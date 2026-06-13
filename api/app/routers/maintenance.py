@@ -8,8 +8,6 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from alembic.config import Config
-from alembic import command
 
 from app.core.security import require_admin
 from app.core.config import settings
@@ -37,6 +35,9 @@ def migrate(_: str = Depends(require_admin)):
     prev = settings.DATABASE_URL
     object.__setattr__(settings, "DATABASE_URL", target)  # env.py reads this
     try:
+        from alembic.config import Config  # lazy: keep alembic out of cold start
+        from alembic import command
+
         root = Path(__file__).resolve().parents[2]  # api/
         cfg = Config(str(root / "alembic.ini"))
         cfg.set_main_option("script_location", str(root / "alembic"))

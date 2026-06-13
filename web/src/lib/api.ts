@@ -64,8 +64,10 @@ export const listMembers = () => apiGet<MemberSummary[]>("/members");
 export const deleteMember = (id: number) => apiDelete(`/members/${id}`);
 export const getMember = (id: number) => apiGet<Member>(`/members/${id}`);
 export const createMember = (m: NewMember) => apiPost<Member>("/members", m);
+// Dashboard projections are read-only — persist:false skips the DB write,
+// cutting latency and avoiding unbounded SimulationRun growth on every page load.
 export const simulate = (id: number, end_age = 90) =>
-  apiPost<SimRun>(`/members/${id}/simulate`, { end_age });
+  apiPost<SimRun>(`/members/${id}/simulate`, { end_age, persist: false });
 export const getAnalysis = (id: number, body: Record<string, unknown> = {}) =>
   apiPost<Analysis>(`/members/${id}/analysis`, body);
 
