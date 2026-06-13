@@ -62,6 +62,21 @@ export function SavingsIcon({ className }: IconProps) {
   );
 }
 
+/* Ordinary Account — wallet with house roof (OA funds housing) */
+export function OrdinaryIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} fill="none" aria-hidden="true">
+      <rect x="7" y="16" width="34" height="24" rx="4" fill="currentColor" opacity="0.12" />
+      <rect x="7" y="16" width="34" height="24" rx="4" fill="none" stroke="var(--chart-1)" strokeWidth="2.5" />
+      <path d="M24 6 L40 17 H8 Z" fill="var(--chart-4)" opacity="0.85" />
+      <g className="anim-float" style={{ transformOrigin: "33px 28px" }}>
+        <circle cx="33" cy="28" r="4.5" fill="var(--chart-2)" />
+        <text x="33" y="31" textAnchor="middle" fontSize="7" fontWeight="700" fill="#fff">$</text>
+      </g>
+    </svg>
+  );
+}
+
 /* Optimisation — glowing lightbulb */
 export function OptimiseIcon({ className }: IconProps) {
   return (

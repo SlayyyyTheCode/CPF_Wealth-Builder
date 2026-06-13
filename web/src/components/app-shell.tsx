@@ -12,6 +12,7 @@ function buildTabs(clientId: string): TabDef[] {
   return [
     { label: "Overview",            href: `/clients/${clientId}` },
     { label: "Milestones",          href: `/clients/${clientId}/milestones` },
+    { label: "Ordinary Account (OA)", href: `/clients/${clientId}/oa` },
     { label: "Medisave (MA)",       href: `/clients/${clientId}/medisave` },
     { label: "Special Account (SA)", href: `/clients/${clientId}/sa` },
     { label: "Optimisation",        href: `/clients/${clientId}/optimisation` },
