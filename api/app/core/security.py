@@ -22,8 +22,9 @@ def verify_admin(username: str, password: str) -> bool:
         return False
     if settings.ADMIN_PASSWORD_HASH:
         try:
+            # .strip(): env managers (Vercel/Render) can append a trailing newline
             return bcrypt.checkpw(
-                password.encode(), settings.ADMIN_PASSWORD_HASH.encode()
+                password.encode(), settings.ADMIN_PASSWORD_HASH.strip().encode()
             )
         except ValueError:
             return False

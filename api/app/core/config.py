@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     DATABASE_URL: str = "postgresql+psycopg://cpf:cpf@localhost:5432/cpf"
     CORS_ORIGINS: str = "http://localhost:3000"
+    # Optional regex to allow a family of origins (e.g. all this project's Vercel
+    # preview/prod URLs) without listing each one.
+    CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app"
     ANTHROPIC_API_KEY: str = ""
 
     # --- Admin auth ---
