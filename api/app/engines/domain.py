@@ -44,6 +44,7 @@ class YearResult:
     interest_base: Decimal
     interest_extra: Decimal
     interest_by_account: dict = field(default_factory=dict)
+    contribution_by_account: dict = field(default_factory=dict)
     overflow_out: dict = field(default_factory=dict)
 
 

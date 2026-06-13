@@ -10,7 +10,6 @@ import { MedisaveAdequacy } from "@/components/medisave-adequacy";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
 import { sgd } from "@/lib/format";
-import { monthlyContribution } from "@/lib/cpf";
 
 // MA earns the 4% floor rate.
 const MA_RATE = 0.04;
@@ -146,9 +145,10 @@ export default function MedisavePage({
     setDrawResult({ after, projected, interest: projected - after, series });
   }
 
-  // MA contribution from wage (employee + employer) at the selected year's age.
-  const maMonthlyIn = monthlyContribution(member.monthly_gross_wage, age, "MA", owCeiling);
-  const maAnnualIn = maMonthlyIn * 12;
+  // MA contribution from wage (employee + employer) — exact engine figure for
+  // the selected year.
+  const maAnnualIn = yr?.contribution_by_account?.MA ?? 0;
+  const maMonthlyIn = maAnnualIn / 12;
   const cappedWage = Math.min(
     member.monthly_gross_wage,
     owCeiling > 0 ? owCeiling : member.monthly_gross_wage,
@@ -255,9 +255,9 @@ export default function MedisavePage({
           </div>
         </div>
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Employee + employer contribution flowing to MA at this age, on wage capped at the Ordinary
-          Wage ceiling ({sgd(owCeiling)}/mth). MA inflow stops once the BHS is reached and overflows
-          out. Indicative allocation; the projection applies exact policy rates.
+          Employee + employer contribution flowing to MA this year (from the projection engine), on
+          wage capped at the Ordinary Wage ceiling ({sgd(owCeiling)}/mth). MA inflow stops once the
+          BHS is reached and overflows out.
         </p>
       </div>
 

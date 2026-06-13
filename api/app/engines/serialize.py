@@ -22,6 +22,7 @@ def serialize_result(res: SimulationResult) -> dict:
                 "interest_base": float(y.interest_base),
                 "interest_extra": float(y.interest_extra),
                 "interest_by_account": y.interest_by_account,
+                "contribution_by_account": y.contribution_by_account,
                 "overflow_out": y.overflow_out,
             }
             for y in res.years

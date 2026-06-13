@@ -8,7 +8,6 @@ import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, OrdinaryIcon, HousingIcon, RocketIcon } from "@/components/icons";
 import { sgd } from "@/lib/format";
-import { monthlyContribution } from "@/lib/cpf";
 
 // OA base interest floor.
 const OA_RATE = 0.025;
@@ -121,9 +120,10 @@ export default function OaPage({
   const oaIntoRa =
     oa54 !== null && oa55 !== null ? Math.max(oa54 - oa55, 0) : null;
 
-  // OA contribution from wage (employee + employer) at the selected year's age.
-  const oaMonthlyIn = monthlyContribution(member.monthly_gross_wage, age, "OA", owCeiling);
-  const oaAnnualIn = oaMonthlyIn * 12;
+  // OA contribution from wage (employee + employer) — exact engine figure for
+  // the selected year, split per account.
+  const oaAnnualIn = yr?.contribution_by_account?.OA ?? 0;
+  const oaMonthlyIn = oaAnnualIn / 12;
   const cappedWage = Math.min(member.monthly_gross_wage, owCeiling > 0 ? owCeiling : member.monthly_gross_wage);
 
   // Housing-withdrawal calculator — monthly mortgage draw, compounded monthly.
@@ -247,9 +247,8 @@ export default function OaPage({
           </div>
         </div>
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Employee + employer contribution flowing to OA at this age, on wage capped at the Ordinary
-          Wage ceiling ({sgd(owCeiling)}/mth). Indicative allocation; the projection applies exact
-          policy rates.
+          Employee + employer contribution flowing to OA this year (from the projection engine), on
+          wage capped at the Ordinary Wage ceiling ({sgd(owCeiling)}/mth).
         </p>
       </div>
 

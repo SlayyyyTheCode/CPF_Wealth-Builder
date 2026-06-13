@@ -51,6 +51,7 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
         year_open = state
         base_acc = _zero_acc()
         extra_acc = _zero_acc()
+        contrib_acc = _zero_acc()
         total_contrib = ZERO
         ovf_year = {
             "ma_to_sa": ZERO, "ma_to_oa": ZERO, "ma_to_ra": ZERO,
@@ -84,6 +85,11 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
             total = monthly_contribution(wage, age, policy)
             total_contrib += total
             split = allocate(total, age, policy)
+            # Contribution from wage routed by account (before any overflow out).
+            # The SAorRA slice lands in SA before 55 and in RA from 55 onward.
+            contrib_acc["OA"] += split["OA"]
+            contrib_acc["MA"] += split["MA"]
+            contrib_acc["RA" if age >= 55 else "SA"] += split["SAorRA"]
             state = replace(state, OA=state.OA + split["OA"])
             state, ovf = apply_ma(state, split["MA"], age, policy)
             if ovf is not None:
@@ -113,6 +119,9 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
                     interest_by_account={
                         a: float(round_to_cent(base_acc[a] + extra_acc[a]))
                         for a in ACCOUNTS
+                    },
+                    contribution_by_account={
+                        a: float(round_to_cent(contrib_acc[a])) for a in ACCOUNTS
                     },
                     overflow_out={k: float(v) for k, v in ovf_year.items()},
                 ))

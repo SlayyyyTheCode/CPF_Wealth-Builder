@@ -18,6 +18,7 @@ export interface YearRow {
   opening?: Balances; closing: Balances;
   total_contributions?: number; interest_base?: number; interest_extra?: number;
   interest_by_account?: { OA: number; SA: number; MA: number; RA: number };
+  contribution_by_account?: { OA: number; SA: number; MA: number; RA: number };
   overflow_out?: { ma_to_sa: number; ma_to_oa: number; ma_to_ra: number; sa_to_oa: number; sa_to_ra: number };
 }
 export interface CpfLife {
