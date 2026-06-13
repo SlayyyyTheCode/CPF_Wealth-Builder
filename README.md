@@ -119,23 +119,41 @@ Set `ANTHROPIC_API_KEY` in `api/.env`. Without it, the app uses a deterministic 
 
 ## ☁️ Deploy online (any device, anywhere)
 
-This repo ships a **Render Blueprint** ([`render.yaml`](render.yaml)) that hosts the whole
-stack — Postgres + FastAPI + Next.js — on Render's free tier, straight from GitHub.
+Recommended: **Vercel** (web + API) + **Neon** (Postgres) — all free, always-on. The repo
+includes the Vercel entrypoint (`api/api/index.py`) and rewrite (`api/vercel.json`) for the API.
 
-1. Create a free account at **https://render.com** and authorise it to read this GitHub repo.
-2. **New → Blueprint**, pick the `CPF_Wealth-Builder` repo. Render reads `render.yaml` and
-   provisions: `cpf-db` (Postgres), `cpf-wealth-api` (FastAPI), `cpf-wealth-web` (Next.js).
-3. Click **Apply**. First build takes a few minutes (the API auto-runs `alembic upgrade head`).
-4. Open the **web** service URL (e.g. `https://cpf-wealth-web.onrender.com`) on any phone,
-   tablet or computer.
+### 1. Database — Neon
+1. Sign up at **https://neon.tech** (free) → create a project.
+2. Copy the **pooled** connection string (looks like
+   `postgresql://user:pass@ep-xxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require`).
+3. Create the tables once, from your machine:
+   ```bash
+   cd api
+   # set DATABASE_URL to the Neon string (the app auto-pins the psycopg3 driver)
+   DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require" alembic upgrade head
+   ```
 
-If Render assigns different hostnames, update two env vars and redeploy:
-`CORS_ORIGINS` on the API → the web URL; `NEXT_PUBLIC_API_URL` on the web → the API URL.
+### 2. API — Vercel (Python serverless)
+1. **https://vercel.com** → sign in with GitHub → **Add New… → Project** → import `CPF_Wealth-Builder`.
+2. Set **Root Directory = `api`**.
+3. Add env vars:
+   - `DATABASE_URL` = the Neon pooled string
+   - `CORS_ORIGINS` = your web URL (fill after step 3, then redeploy)
+   - `ANTHROPIC_API_KEY` = *(optional, enables AI policy ingestion)*
+4. Deploy. Note the API URL, e.g. `https://cpf-wealth-api.vercel.app`. Check `/health` → `{"status":"ok"}`.
 
-> **Free-tier note:** services sleep after inactivity, so the first request after idle can take
-> ~50 s to wake. The managed free Postgres also expires after ~30 days — upgrade the DB plan to keep data.
+### 3. Web — Vercel (Next.js)
+1. **Add New… → Project** → import the same repo again → **Root Directory = `web`**.
+2. Add env var `NEXT_PUBLIC_API_URL` = your API URL from step 2.
+3. Deploy → open the web URL on any phone, tablet or computer. 🎉
+4. Go back to the API project and set `CORS_ORIGINS` to this web URL, then redeploy the API.
 
-The UI is fully responsive (phone / tablet / desktop, light + dark).
+> The UI is fully responsive (phone / tablet / desktop, light + dark).
+
+### Alternative — Render (one platform)
+A Render Blueprint ([`render.yaml`](render.yaml)) provisions Postgres + API + web together:
+sign in at **https://render.com**, **New → Blueprint**, pick the repo, **Apply**. (Free tier sleeps
+when idle and the free DB expires ~30 days.)
 
 ## 🔌 Key API endpoints
 
