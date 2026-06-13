@@ -27,13 +27,6 @@ function retInt(yr: YearRow): number {
   return (yr.interest_by_account?.SA ?? 0) + (yr.interest_by_account?.RA ?? 0);
 }
 
-function frsHitAge(years: YearRow[], frs: number): number | null {
-  for (const yr of years) {
-    if (retBal(yr) >= frs) return yr.age;
-  }
-  return null;
-}
-
 // ── page ─────────────────────────────────────────────────────────────────────
 
 export default function SaPage({
@@ -45,8 +38,10 @@ export default function SaPage({
 
   const [res, setRes] = useState<SimResult | null>(null);
   const [member, setMember] = useState<Member | null>(null);
-  const [frs, setFrs] = useState<number>(0);
-  const [ers, setErs] = useState<number>(0);
+  const [frs, setFrs] = useState<number>(0);   // base (today's) FRS
+  const [ers, setErs] = useState<number>(0);   // base (today's) ERS
+  const [sumRate, setSumRate] = useState<number>(0.035);
+  const [baseYear, setBaseYear] = useState<number>(new Date().getFullYear());
   const [err, setErr] = useState<string | null>(null);
 
   // Scrubber
@@ -55,7 +50,7 @@ export default function SaPage({
   // Top-up what-if (yearly) — computed client-side
   const [topup, setTopup] = useState<number>(0);
   const [wiData, setWiData] = useState<
-    { age: number; baseline: number; withTopup: number }[] | null
+    { age: number; baseline: number; withTopup: number; frsLine: number }[] | null
   >(null);
 
   useEffect(() => {
@@ -72,6 +67,9 @@ export default function SaPage({
         setMember(m);
         setFrs(Number(policy.frs) || 0);
         setErs(Number(policy.ers) || 0);
+        const growth = (policy.assumptions as { growth?: { sum_rate?: number } } | undefined)?.growth;
+        setSumRate(Number(growth?.sum_rate ?? 0.035));
+        setBaseYear(Number(policy.effective_year) || new Date().getFullYear());
         if (simRun.result.years.length > 0) {
           setAge(simRun.result.years[0].age);
         }
@@ -108,28 +106,35 @@ export default function SaPage({
   const ages = years.map((y) => y.age);
   const yr = years.find((y) => y.age === age);
 
+  // FRS/ERS rise each year (~sum_rate). Project from the base-year value, like BHS.
+  const proj = (base: number, year: number) =>
+    base * Math.pow(1 + sumRate, Math.max(year - baseYear, 0));
+
   const curRetBal = yr ? retBal(yr) : 0;
   const curRetInt = yr ? retInt(yr) : 0;
-  const neededFrs = Math.max(frs - curRetBal, 0);
-  const neededErs = Math.max(ers - curRetBal, 0);
+  const selYear = yr?.year ?? baseYear;
+  const frsTarget = proj(frs, selYear);
+  const ersTarget = proj(ers, selYear);
+  const neededFrs = Math.max(frsTarget - curRetBal, 0);
+  const neededErs = Math.max(ersTarget - curRetBal, 0);
 
   const saToOa = yr?.overflow_out?.sa_to_oa ?? 0;
   const saToRa = yr?.overflow_out?.sa_to_ra ?? 0;
   const hasOverflow = saToOa > 0 || saToRa > 0;
 
-  // Chart series
+  // Chart series — FRS/ERS projected per year
   const chartData = years.map((y) => ({
     age: y.age,
     balance: retBal(y),
-    frs,
-    ers,
+    frs: Math.round(proj(frs, y.year)),
+    ers: Math.round(proj(ers, y.year)),
   }));
 
-  // Baseline FRS-hit age
-  const baseFrsAge = frsHitAge(years, frs);
+  // Baseline FRS-hit age (against that year's projected FRS)
+  const baseFrsAge = years.find((y) => retBal(y) >= proj(frs, y.year))?.age ?? null;
 
   // What-if derived (yearly top-up estimate)
-  const wiFrsAge = wiData ? (wiData.find((d) => d.withTopup >= frs)?.age ?? null) : null;
+  const wiFrsAge = wiData ? (wiData.find((d) => d.withTopup >= d.frsLine)?.age ?? null) : null;
   const wiFinalBal = wiData ? wiData[wiData.length - 1].withTopup : null;
   const baseFinalBal =
     years.length > 0 ? retBal(years[years.length - 1]) : null;
@@ -154,7 +159,12 @@ export default function SaPage({
     const data = years.map((y, i) => {
       const k = i + 1;
       const fv = topup > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
-      return { age: y.age, baseline: retBal(y), withTopup: retBal(y) + fv };
+      return {
+        age: y.age,
+        baseline: retBal(y),
+        withTopup: retBal(y) + fv,
+        frsLine: Math.round(proj(frs, y.year)),
+      };
     });
     setWiData(data);
   }
@@ -188,18 +198,22 @@ export default function SaPage({
             </p>
           </div>
 
-          {/* FRS target */}
+          {/* FRS target — projected to the selected year */}
           <div className={cardClass}>
-            <p className={labelClass}>FRS target</p>
-            <p className={kpiClass}>{sgd(frs)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">Full Retirement Sum</p>
+            <p className={labelClass}>FRS target for Year {selYear}</p>
+            <p className={kpiClass}>{sgd(frsTarget)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Full Retirement Sum (today {sgd(frs)})
+            </p>
           </div>
 
-          {/* ERS target */}
+          {/* ERS target — projected to the selected year */}
           <div className={cardClass}>
-            <p className={labelClass}>ERS target</p>
-            <p className={kpiClass}>{sgd(ers)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">Enhanced Retirement Sum</p>
+            <p className={labelClass}>ERS target for Year {selYear}</p>
+            <p className={kpiClass}>{sgd(ersTarget)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Enhanced Retirement Sum (today {sgd(ers)})
+            </p>
           </div>
 
           {/* SA/RA interest earned */}
@@ -483,14 +497,17 @@ export default function SaPage({
                   width={52}
                 />
                 <Tooltip
-                  formatter={(v, name) => [sgd(typeof v === "number" ? v : null), name === "baseline" ? "Baseline" : "With yearly top-up"]}
+                  formatter={(v, name) => [
+                    sgd(typeof v === "number" ? v : null),
+                    name === "baseline" ? "Baseline" : name === "withTopup" ? "With yearly top-up" : "FRS",
+                  ]}
                   labelFormatter={(a) => `Age ${a}`}
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
-                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : "With yearly top-up")} wrapperStyle={{ fontSize: "12px" }} />
+                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With yearly top-up" : "FRS (projected)")} wrapperStyle={{ fontSize: "12px" }} />
                 <Line type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
-                <ReferenceLine y={frs} stroke="var(--chart-3)" strokeDasharray="6 3" label={{ value: "FRS", position: "right", fontSize: 10 }} />
+                <Line type="monotone" dataKey="frsLine" stroke="var(--chart-3)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

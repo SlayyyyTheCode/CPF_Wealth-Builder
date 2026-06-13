@@ -4,6 +4,9 @@ import type { YearRow } from "@/lib/types";
 
 const COLORS = { OA: "var(--chart-1)", SA: "var(--chart-2)", MA: "var(--chart-3)", RA: "var(--chart-4)" };
 const TOTAL_COLOR = "var(--chart-5)";
+const ORDER = ["OA", "SA", "MA", "RA", "Total"];
+// keep tooltip rows OA → Total (stacked charts otherwise reverse them)
+const sortItems = (i: { dataKey?: unknown }) => ORDER.indexOf(String(i.dataKey));
 
 export function NetWorthChart({ years }: { years: YearRow[] }) {
   const data = years.map((y) => {
@@ -18,7 +21,10 @@ export function NetWorthChart({ years }: { years: YearRow[] }) {
           <ComposedChart data={data} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
             <XAxis dataKey="age" tick={{ fontSize: 12 }} />
             <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} width={40} />
-            <Tooltip formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)} />
+            <Tooltip
+              formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)}
+              itemSorter={sortItems}
+            />
             <Legend />
             {(["OA", "SA", "MA", "RA"] as const).map((k) =>
               <Area key={k} type="monotone" dataKey={k} stackId="1" stroke={COLORS[k]} fill={COLORS[k]} />)}

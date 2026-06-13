@@ -191,18 +191,21 @@ export default function MedisavePage({
         <h3 className={`${labelClass} mb-3`}>MA overflow (age {age})</h3>
         {hasOverflow ? (
           <>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <p className="text-xs text-[var(--color-muted)]">→ SA</p>
-                <p className="mt-0.5 font-semibold tabular-nums">{sgd(maToSa)}</p>
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              {age < 55 ? (
+                <div>
+                  <p className="text-xs text-[var(--color-muted)]">→ SA</p>
+                  <p className="mt-0.5 font-semibold tabular-nums">{sgd(maToSa)}</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs text-[var(--color-muted)]">→ RA</p>
+                  <p className="mt-0.5 font-semibold tabular-nums">{sgd(maToRa)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-[var(--color-muted)]">→ OA</p>
                 <p className="mt-0.5 font-semibold tabular-nums">{sgd(maToOa)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[var(--color-muted)]">→ RA</p>
-                <p className="mt-0.5 font-semibold tabular-nums">{sgd(maToRa)}</p>
               </div>
             </div>
             <div className="mt-3 border-t border-[var(--color-border)] pt-3">
@@ -218,7 +221,7 @@ export default function MedisavePage({
           </p>
         )}
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Once MA exceeds the Basic Healthcare Sum, contributions overflow to SA/RA (before 55) or OA.
+          Once MA exceeds the BHS, overflow goes to SA before 55 — and to RA from age 55, when the SA closes and merges into the RA. Any remainder above the retirement sum goes to OA.
         </p>
       </div>
 
