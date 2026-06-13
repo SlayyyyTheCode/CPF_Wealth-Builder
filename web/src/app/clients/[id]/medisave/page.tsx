@@ -1,5 +1,8 @@
 "use client";
 import { use, useEffect, useState } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
+} from "recharts";
 import { simulate } from "@/lib/api";
 import type { SimResult } from "@/lib/types";
 import { MaBhsChart } from "@/components/ma-bhs-chart";
@@ -23,7 +26,12 @@ export default function MedisavePage({
   const [drawYears, setDrawYears] = useState(10);
   const [drawRate, setDrawRate] = useState(4);
   const [drawResult, setDrawResult] = useState<
-    { after: number; projected: number; interest: number } | null
+    {
+      after: number;
+      projected: number;
+      interest: number;
+      series: { age: number; ma: number; bhs: number; maAfter: number | null }[];
+    } | null
   >(null);
 
   // Scrubber state
@@ -100,10 +108,21 @@ export default function MedisavePage({
 
   // Insurance drawdown calculator — committed on "Calculate"
   function calcDrawdown() {
+    if (!medisave) return;
     const r = drawRate / 100;
     const after = Math.max(maNow - withdraw, 0);
     const projected = after * (1 + r) ** drawYears;
-    setDrawResult({ after, projected, interest: projected - after });
+    const startAge = years[0].age;
+    const series = medisave.series.map((s) => ({
+      age: s.age,
+      ma: s.ma,
+      bhs: s.bhs,
+      maAfter:
+        s.age >= startAge && s.age <= startAge + drawYears
+          ? Math.round(after * (1 + r) ** (s.age - startAge))
+          : null,
+    }));
+    setDrawResult({ after, projected, interest: projected - after, series });
   }
 
   // Premium table — sampled every 10 years
@@ -315,6 +334,42 @@ export default function MedisavePage({
             </div>
           </div>
         )}
+
+        {drawResult && (
+          <div
+            role="img"
+            aria-label="MA balance versus BHS versus MA balance after withdrawal by age"
+            className="mt-4 h-64"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={drawResult.series} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                <YAxis
+                  tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                  tick={{ fontSize: 11, fill: "var(--color-muted)" }}
+                  width={52}
+                />
+                <Tooltip
+                  formatter={(v, name) => [
+                    sgd(typeof v === "number" ? v : null),
+                    name === "ma" ? "MA balance" : name === "bhs" ? "BHS" : "MA after withdrawal",
+                  ]}
+                  labelFormatter={(a) => `Age ${a}`}
+                  contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
+                />
+                <Legend
+                  formatter={(v) => (v === "ma" ? "MA balance" : v === "bhs" ? "BHS" : "MA after withdrawal")}
+                  wrapperStyle={{ fontSize: "12px" }}
+                />
+                <Line type="monotone" dataKey="ma" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="bhs" stroke="var(--chart-grey)" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+                <Line type="monotone" dataKey="maAfter" stroke="var(--chart-3)" strokeWidth={2.5} dot={false} connectNulls />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
         <p className="mt-2 text-xs text-[var(--color-muted)]">
           Projects your MediSave after deducting the withdrawal, compounding the remainder at the rate above. Prefilled with the current MA balance — edit any field, then Calculate.
         </p>
