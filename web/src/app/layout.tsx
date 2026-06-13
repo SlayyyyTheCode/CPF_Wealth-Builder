@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
@@ -14,8 +14,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CPF Builder",
-  description: "CPF planning for advisors",
+  title: "CPF Wealth Builder",
+  description: "CPF planning dashboard for advisors — works on phone, tablet and desktop",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // allow user pinch-zoom for accessibility
+  maximumScale: 5,
 };
 
 export default function RootLayout({

@@ -117,6 +117,26 @@ Set `ANTHROPIC_API_KEY` in `api/.env`. Without it, the app uses a deterministic 
 
 ---
 
+## ☁️ Deploy online (any device, anywhere)
+
+This repo ships a **Render Blueprint** ([`render.yaml`](render.yaml)) that hosts the whole
+stack — Postgres + FastAPI + Next.js — on Render's free tier, straight from GitHub.
+
+1. Create a free account at **https://render.com** and authorise it to read this GitHub repo.
+2. **New → Blueprint**, pick the `CPF_Wealth-Builder` repo. Render reads `render.yaml` and
+   provisions: `cpf-db` (Postgres), `cpf-wealth-api` (FastAPI), `cpf-wealth-web` (Next.js).
+3. Click **Apply**. First build takes a few minutes (the API auto-runs `alembic upgrade head`).
+4. Open the **web** service URL (e.g. `https://cpf-wealth-web.onrender.com`) on any phone,
+   tablet or computer.
+
+If Render assigns different hostnames, update two env vars and redeploy:
+`CORS_ORIGINS` on the API → the web URL; `NEXT_PUBLIC_API_URL` on the web → the API URL.
+
+> **Free-tier note:** services sleep after inactivity, so the first request after idle can take
+> ~50 s to wake. The managed free Postgres also expires after ~30 days — upgrade the DB plan to keep data.
+
+The UI is fully responsive (phone / tablet / desktop, light + dark).
+
 ## 🔌 Key API endpoints
 
 | Method | Path | Purpose |

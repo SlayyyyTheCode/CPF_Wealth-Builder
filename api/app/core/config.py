@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,18 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+psycopg://cpf:cpf@localhost:5432/cpf"
     CORS_ORIGINS: str = "http://localhost:3000"
     ANTHROPIC_API_KEY: str = ""
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _use_psycopg3_driver(cls, v: str) -> str:
+        # Managed hosts (Render, Heroku, etc.) hand out plain `postgres://` or
+        # `postgresql://` URLs. Pin the psycopg (v3) driver so SQLAlchemy doesn't
+        # default to psycopg2. SQLite and already-qualified URLs pass through.
+        if v.startswith("postgres://"):
+            v = "postgresql://" + v[len("postgres://"):]
+        if v.startswith("postgresql://"):
+            v = "postgresql+psycopg://" + v[len("postgresql://"):]
+        return v
 
     @property
     def cors_list(self) -> list[str]:
