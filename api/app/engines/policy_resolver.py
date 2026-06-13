@@ -54,16 +54,19 @@ def project_policy(base_policy: dict, base_year: int, target_year: int,
 
 
 def make_db_resolver(db: Session, growth: GrowthAssumptions | None = None):
+    # Fetch active snapshots ONCE. The simulation resolves ~66 distinct years;
+    # querying per year hammered remote Postgres (tens of seconds). One query now.
+    actives = db.scalars(
+        select(PolicySnapshot).where(PolicySnapshot.status == "active")
+    ).all()
+    if not actives:
+        raise ValueError("no active policy snapshot")
+
     cache: dict[int, dict] = {}
 
     def resolve(year: int) -> dict:
         if year in cache:
             return cache[year]
-        actives = db.scalars(
-            select(PolicySnapshot).where(PolicySnapshot.status == "active")
-        ).all()
-        if not actives:
-            raise ValueError("no active policy snapshot")
         at_or_before = [s for s in actives if s.effective_year <= year]
         chosen = (
             max(at_or_before, key=lambda s: s.effective_year)
