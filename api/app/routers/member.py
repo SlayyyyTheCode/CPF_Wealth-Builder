@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.member import MemberProfile
 from app.models.simulation import SimulationRun
 from app.schemas.member import MemberCreate, MemberOut, MemberSummaryOut, MemberUpdate
+from app.core.security import require_admin
 
 router = APIRouter(prefix="/members", tags=["members"])
 
@@ -40,7 +41,7 @@ def list_members(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=MemberOut, status_code=status.HTTP_201_CREATED)
-def create_member(payload: MemberCreate, db: Session = Depends(get_db)):
+def create_member(payload: MemberCreate, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     data = payload.model_dump()
     data["balances"] = payload.balances.model_dump()
     m = MemberProfile(**data)
@@ -59,7 +60,7 @@ def get_member(member_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_member(member_id: int, db: Session = Depends(get_db)):
+def delete_member(member_id: int, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     m = db.get(MemberProfile, member_id)
     if not m:
         raise HTTPException(404, "Member not found")
@@ -74,7 +75,7 @@ def delete_member(member_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{member_id}", response_model=MemberOut)
-def update_member(member_id: int, payload: MemberUpdate, db: Session = Depends(get_db)):
+def update_member(member_id: int, payload: MemberUpdate, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     m = db.get(MemberProfile, member_id)
     if not m:
         raise HTTPException(404, "Member not found")

@@ -42,6 +42,19 @@ def db_session():
 
 @pytest.fixture
 def client(db_session):
+    """Authenticated client (admin Bearer token) — most tests mutate data."""
+    from app.core.security import create_admin_token
+    from app.core.config import settings
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db_session
+    token = create_admin_token(settings.ADMIN_USERNAME)
+    return TestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+
+@pytest.fixture
+def anon_client(db_session):
+    """Unauthenticated client — for testing public access + 401s."""
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db_session
     return TestClient(app)

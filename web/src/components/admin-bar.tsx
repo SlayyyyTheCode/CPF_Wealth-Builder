@@ -8,7 +8,7 @@ export function AdminBar({
   onLogout,
 }: {
   isAdmin: boolean;
-  onLogin: (id: string, pw: string) => boolean;
+  onLogin: (id: string, pw: string) => Promise<boolean>;
   onLogout: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -16,14 +16,18 @@ export function AdminBar({
   const [pw, setPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (onLogin(id, pw)) {
+    setBusy(true);
+    setErr(null);
+    const ok = await onLogin(id, pw);
+    setBusy(false);
+    if (ok) {
       setOpen(false);
       setId("");
       setPw("");
-      setErr(null);
     } else {
       setErr("Invalid ID or password.");
     }
@@ -129,9 +133,10 @@ export function AdminBar({
               </button>
               <button
                 type="submit"
-                className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary-hover)]"
+                disabled={busy}
+                className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
               >
-                Sign in
+                {busy ? "Signing in…" : "Sign in"}
               </button>
             </div>
           </form>

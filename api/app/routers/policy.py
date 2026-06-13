@@ -15,6 +15,7 @@ from app.schemas.policy import (
 from app.ai.extractor import get_extractor, ExtractionError, PolicyExtractor
 from app.ai.diff import diff_policy, CORE_FIELDS
 from app.core.config import settings
+from app.core.security import require_admin
 
 router = APIRouter(prefix="/policy", tags=["policy"])
 
@@ -46,6 +47,7 @@ async def ingest(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     extractor: PolicyExtractor = Depends(extractor_dep),
+    _: str = Depends(require_admin),
 ):
     data = await file.read()
     try:
@@ -95,7 +97,7 @@ def get_active(year: int, db: Session = Depends(get_db)):
     response_model=PolicySnapshotOut,
     status_code=status.HTTP_201_CREATED,
 )
-def create_snapshot(payload: PolicySnapshotCreate, db: Session = Depends(get_db)):
+def create_snapshot(payload: PolicySnapshotCreate, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     snap = PolicySnapshot(**payload.model_dump(), status="draft")
     db.add(snap)
     db.commit()
@@ -104,7 +106,7 @@ def create_snapshot(payload: PolicySnapshotCreate, db: Session = Depends(get_db)
 
 
 @router.post("/snapshots/{snap_id}/approve", response_model=PolicySnapshotOut)
-def approve(snap_id: int, db: Session = Depends(get_db)):
+def approve(snap_id: int, db: Session = Depends(get_db), _: str = Depends(require_admin)):
     snap = db.get(PolicySnapshot, snap_id)
     if not snap:
         raise HTTPException(404, "Snapshot not found")

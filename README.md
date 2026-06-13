@@ -82,18 +82,34 @@ Open **http://localhost:3000**. Health check: **http://localhost:3000/health** �
 
 > On networks with TLS inspection, run the web dev/build with `NODE_OPTIONS=--use-system-ca`.
 
-### Administrator mode
+### Access model & administrator login
 
-On the **Clients** page, click **Administrator sign in** to unlock client deletion.
+**Reads are public** (browse clients, run projections and calculators). **Writes are admin-only**
+(create / edit / delete clients, manage policy) and protected by real server-side auth:
 
+- Login (`POST /auth/login`) verifies credentials against server env vars and returns a **JWT**.
+- Mutating endpoints require a valid `Authorization: Bearer <token>`; tokens expire.
+- Credentials never ship in the browser bundle.
+
+On the **Clients** page, click **Administrator sign in**. Local-dev default: `useradmin` /
+`P@ssw0rd2022` (set via `ADMIN_PASSWORD` in `api/.env`). In production set a strong password —
+see env vars below.
+
+#### Auth env vars (`api/.env`)
+
+| Var | Purpose |
+|-----|---------|
+| `ADMIN_USERNAME` | Admin login name (default `useradmin`). |
+| `ADMIN_PASSWORD_HASH` | **Production** — bcrypt hash of the password (leave `ADMIN_PASSWORD` empty). |
+| `ADMIN_PASSWORD` | Dev convenience plaintext; used only when no hash is set. |
+| `JWT_SECRET` | Long random string used to sign tokens — **must** be set in production. |
+| `JWT_EXPIRE_MINUTES` | Token lifetime (default 720). |
+
+Generate production secrets:
+```bash
+python -c "import bcrypt;print(bcrypt.hashpw(b'YOUR_PASSWORD',bcrypt.gensalt()).decode())"  # ADMIN_PASSWORD_HASH
+python -c "import secrets;print(secrets.token_urlsafe(48))"                                  # JWT_SECRET
 ```
-ID:       useradmin
-Password: P@ssw0rd2022
-```
-
-> ⚠️ This is a lightweight client-side gate for a local tool, **not real authentication** — the
-> credentials live in the browser bundle and the delete API is unprotected. Add server-side auth
-> before exposing this app beyond a trusted machine.
 
 ---
 
@@ -139,6 +155,8 @@ includes the Vercel entrypoint (`api/api/index.py`) and rewrite (`api/vercel.jso
 3. Add env vars:
    - `DATABASE_URL` = the Neon pooled string
    - `CORS_ORIGINS` = your web URL (fill after step 3, then redeploy)
+   - `ADMIN_PASSWORD_HASH` = bcrypt hash of your admin password (and leave `ADMIN_PASSWORD` unset)
+   - `JWT_SECRET` = a long random string
    - `ANTHROPIC_API_KEY` = *(optional, enables AI policy ingestion)*
 4. Deploy. Note the API URL, e.g. `https://cpf-wealth-api.vercel.app`. Check `/health` → `{"status":"ok"}`.
 

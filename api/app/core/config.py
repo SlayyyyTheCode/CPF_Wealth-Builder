@@ -8,6 +8,15 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000"
     ANTHROPIC_API_KEY: str = ""
 
+    # --- Admin auth ---
+    ADMIN_USERNAME: str = "useradmin"
+    # Production: set ADMIN_PASSWORD_HASH (bcrypt). Dev fallback: ADMIN_PASSWORD
+    # (plaintext). If neither is set, admin login is disabled.
+    ADMIN_PASSWORD_HASH: str = ""
+    ADMIN_PASSWORD: str = "P@ssw0rd2022"
+    JWT_SECRET: str = "dev-insecure-change-me-0000000000000000"
+    JWT_EXPIRE_MINUTES: int = 720
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _use_psycopg3_driver(cls, v: str) -> str:
