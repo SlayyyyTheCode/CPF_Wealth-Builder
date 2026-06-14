@@ -310,9 +310,10 @@ function TaxAfterDeductionCard({
 }) {
   const [result, setResult] = useState<{
     income: number;
-    rows: { label: string; deduction: number; saved: number }[];
-    totalDeduction: number;
+    rows: { label: string; saved: number }[];
+    taxPayable: number;
     totalSaved: number;
+    taxableAfter: number;
   } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -323,24 +324,26 @@ function TaxAfterDeductionCard({
     setErr(null);
     setLoading(true);
     try {
-      const charityDed = charity * 2.5;
       const [srsR, charityR, parentR, rstuR] = await Promise.all([
         taxEstimate(income, srs),
-        taxEstimate(income, charityDed),
+        taxEstimate(income, charity * 2.5),
         taxEstimate(income, parent),
         taxReliefCalc({ income, rstu_self: rstu }),
       ]);
       const rows = [
-        { label: "SRS top-up", deduction: srs, saved: srsR.estimated_tax_saved },
-        { label: "CPF cash top-up (RSTU)", deduction: rstuR.relief_earned, saved: rstuR.estimated_tax_saved },
-        { label: "Charity donation (2.5×)", deduction: charityDed, saved: charityR.estimated_tax_saved },
-        { label: "Parent relief", deduction: parent, saved: parentR.estimated_tax_saved },
+        { label: "SRS top-up", saved: srsR.estimated_tax_saved },
+        { label: "CPF cash top-up (RSTU)", saved: rstuR.estimated_tax_saved },
+        { label: "Charity donation (2.5×)", saved: charityR.estimated_tax_saved },
+        { label: "Parent relief", saved: parentR.estimated_tax_saved },
       ];
+      const taxPayable = computeIncomeTax(income).tax;
+      const totalSaved = rows.reduce((s, r) => s + r.saved, 0);
       setResult({
         income,
         rows,
-        totalDeduction: rows.reduce((s, r) => s + r.deduction, 0),
-        totalSaved: rows.reduce((s, r) => s + r.saved, 0),
+        taxPayable,
+        totalSaved,
+        taxableAfter: Math.max(taxPayable - totalSaved, 0),
       });
     } catch (e) {
       setErr((e as Error).message);
@@ -367,48 +370,44 @@ function TaxAfterDeductionCard({
 
       {result && (
         <>
-          {/* Per-relief breakdown: deduction + matching tax saved */}
+          {/* Per-relief breakdown: tax saved only */}
           <div className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm" role="status" aria-live="polite">
             <div className="flex justify-between pb-1 text-xs font-medium text-[var(--color-muted)]">
               <span>Relief</span>
-              <span className="flex gap-6">
-                <span className="w-20 text-right">Deduction</span>
-                <span className="w-20 text-right">Tax saved</span>
-              </span>
+              <span className="w-24 text-right">Tax saved</span>
             </div>
             {result.rows.map((r) => (
               <div key={r.label} className="flex justify-between py-0.5">
                 <span className="text-[var(--color-muted)]">{r.label}</span>
-                <span className="flex gap-6 tabular-nums">
-                  <span className="w-20 text-right">{sgd(r.deduction)}</span>
-                  <span className="w-20 text-right">{sgd(r.saved)}</span>
-                </span>
+                <span className="w-24 text-right tabular-nums">{sgd(r.saved)}</span>
               </div>
             ))}
             <div className="mt-1 flex justify-between border-t border-[var(--color-border)] pt-1 font-medium">
-              <span>Total</span>
-              <span className="flex gap-6 tabular-nums">
-                <span className="w-20 text-right">{sgd(result.totalDeduction)}</span>
-                <span className="w-20 text-right text-[var(--color-primary)]">{sgd(result.totalSaved)}</span>
-              </span>
+              <span>Total tax saved</span>
+              <span className="w-24 text-right tabular-nums text-[var(--color-primary)]">{sgd(result.totalSaved)}</span>
             </div>
           </div>
 
           {/* Result grid */}
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <div>
               <p className="text-xs text-[var(--color-muted)]">Assessable income</p>
               <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.income)}</p>
             </div>
             <div>
-              <p className="text-xs text-[var(--color-muted)]">Total deductions applied</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.totalDeduction)}</p>
+              <p className="text-xs text-[var(--color-muted)]">Income tax payable</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.taxPayable)}</p>
             </div>
             <div>
               <p className="text-xs text-[var(--color-muted)]">Total tax saved</p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
                 {sgd(result.totalSaved)}
               </p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Total Taxable Income For This Year</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.taxableAfter)}</p>
+              <p className="text-xs text-[var(--color-muted)]">tax payable − tax saved</p>
             </div>
           </div>
         </>
