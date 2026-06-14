@@ -354,7 +354,7 @@ export default function SaPage({
                 }}
                 wrapperStyle={{ fontSize: "12px" }}
               />
-              <Line
+              <Line isAnimationActive={false}
                 type="monotone"
                 dataKey="balance"
                 stroke="var(--chart-1)"
@@ -362,7 +362,7 @@ export default function SaPage({
                 dot={false}
                 name="balance"
               />
-              <Line
+              <Line isAnimationActive={false}
                 type="monotone"
                 dataKey="frs"
                 stroke="var(--chart-3)"
@@ -371,7 +371,7 @@ export default function SaPage({
                 dot={false}
                 name="frs"
               />
-              <Line
+              <Line isAnimationActive={false}
                 type="monotone"
                 dataKey="ers"
                 stroke="var(--chart-4)"
@@ -526,9 +526,9 @@ export default function SaPage({
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
                 <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With yearly top-up" : "FRS (projected)")} wrapperStyle={{ fontSize: "12px" }} />
-                <Line type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="frsLine" stroke="var(--chart-3)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="frsLine" stroke="var(--chart-3)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

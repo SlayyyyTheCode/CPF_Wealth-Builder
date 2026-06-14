@@ -440,9 +440,9 @@ export default function MedisavePage({
                   formatter={(v) => (v === "ma" ? "MA balance" : v === "bhs" ? "BHS" : "MA after withdrawal")}
                   wrapperStyle={{ fontSize: "12px" }}
                 />
-                <Line type="monotone" dataKey="ma" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="bhs" stroke="var(--chart-grey)" strokeWidth={2} strokeDasharray="5 3" dot={false} />
-                <Line type="monotone" dataKey="maAfter" stroke="var(--chart-3)" strokeWidth={2.5} dot={false} connectNulls />
+                <Line isAnimationActive={false} type="monotone" dataKey="ma" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="bhs" stroke="var(--chart-grey)" strokeWidth={2} strokeDasharray="5 3" dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="maAfter" stroke="var(--chart-3)" strokeWidth={2.5} dot={false} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -547,9 +547,9 @@ export default function MedisavePage({
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
                 <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With yearly top-up" : "BHS")} wrapperStyle={{ fontSize: "12px" }} />
-                <Line type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="withTopup" stroke="var(--chart-2)" strokeWidth={2.5} dot={false} />
-                <Line type="monotone" dataKey="bhs" stroke="var(--chart-grey)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="withTopup" stroke="var(--chart-2)" strokeWidth={2.5} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="bhs" stroke="var(--chart-grey)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

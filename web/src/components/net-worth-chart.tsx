@@ -27,8 +27,8 @@ export function NetWorthChart({ years }: { years: YearRow[] }) {
             />
             <Legend />
             {(["OA", "SA", "MA", "RA"] as const).map((k) =>
-              <Area key={k} type="monotone" dataKey={k} stackId="1" stroke={COLORS[k]} fill={COLORS[k]} />)}
-            <Line type="monotone" dataKey="Total" stroke={TOTAL_COLOR} strokeWidth={2.5} dot={false} />
+              <Area isAnimationActive={false} key={k} type="monotone" dataKey={k} stackId="1" stroke={COLORS[k]} fill={COLORS[k]} />)}
+            <Line isAnimationActive={false} type="monotone" dataKey="Total" stroke={TOTAL_COLOR} strokeWidth={2.5} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

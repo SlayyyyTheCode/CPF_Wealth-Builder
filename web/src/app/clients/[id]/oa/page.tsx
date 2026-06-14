@@ -300,7 +300,7 @@ export default function OaPage({
                 labelFormatter={(a) => `Age ${a}`}
                 contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
               />
-              <Line type="monotone" dataKey="oa" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+              <Line isAnimationActive={false} type="monotone" dataKey="oa" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
               <ReferenceLine x={55} stroke="var(--chart-4)" strokeDasharray="4 2" label={{ value: "55 → RA", fontSize: 10, fill: "var(--color-muted)" }} />
               <ReferenceLine x={age} stroke="var(--color-primary)" strokeOpacity={0.4} strokeDasharray="4 2" />
             </LineChart>
@@ -482,8 +482,8 @@ export default function OaPage({
                   formatter={(v) => (v === "oa" ? "OA balance" : "OA after withdrawal")}
                   wrapperStyle={{ fontSize: "12px" }}
                 />
-                <Line type="monotone" dataKey="oa" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="oaAfter" stroke="var(--chart-3)" strokeWidth={2.5} dot={false} connectNulls />
+                <Line isAnimationActive={false} type="monotone" dataKey="oa" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="oaAfter" stroke="var(--chart-3)" strokeWidth={2.5} dot={false} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -590,8 +590,8 @@ export default function OaPage({
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
                 <Legend formatter={(v) => (v === "baseline" ? "Baseline" : "With yearly top-up")} wrapperStyle={{ fontSize: "12px" }} />
-                <Line type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

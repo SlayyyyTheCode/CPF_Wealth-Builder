@@ -29,8 +29,8 @@ export function AccountBreakdownChart({ years }: { years: YearRow[] }) {
             />
             <Legend />
             {(["OA", "SA", "MA", "RA"] as const).map((k) =>
-              <Bar key={k} dataKey={k} stackId="1" fill={COLORS[k]} />)}
-            <Line type="monotone" dataKey="Total" stroke={TOTAL_COLOR} strokeWidth={2.5} dot={false} />
+              <Bar isAnimationActive={false} key={k} dataKey={k} stackId="1" fill={COLORS[k]} />)}
+            <Line isAnimationActive={false} type="monotone" dataKey="Total" stroke={TOTAL_COLOR} strokeWidth={2.5} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

@@ -43,7 +43,7 @@ export function GrowthChart({ years }: { years: YearRow[] }) {
             <Tooltip formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)} />
             <Legend wrapperStyle={{ fontSize: "12px" }} />
             {SERIES.map((s) => (
-              <Line
+              <Line isAnimationActive={false}
                 key={s.key}
                 type="monotone"
                 dataKey={s.key}

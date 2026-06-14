@@ -68,7 +68,7 @@ export function MaBhsChart({ series }: { series: Series }) {
               }
               wrapperStyle={{ fontSize: "12px" }}
             />
-            <Area
+            <Area isAnimationActive={false}
               type="monotone"
               dataKey="ma"
               stroke="var(--chart-2)"
@@ -76,7 +76,7 @@ export function MaBhsChart({ series }: { series: Series }) {
               fill="url(#gradMA)"
               dot={false}
             />
-            <Area
+            <Area isAnimationActive={false}
               type="monotone"
               dataKey="bhs"
               stroke="var(--chart-grey)"
