@@ -5,6 +5,16 @@ financial advisors and HR teams. Model a member's CPF accounts decade by decade 
 contributions, interest, retirement-sum milestones, MediSave adequacy and CPF LIFE payouts —
 and explore "what-if" optimisations, all from a clean pastel UI.
 
+## 🚀 Try it
+
+| | |
+|---|---|
+| **▶️ Live app (no install)** | **https://web-mauve-two-25.vercel.app** |
+| **💻 Source code** | https://github.com/SlayyyyTheCode/CPF_Wealth-Builder |
+
+Use the hosted app on any device — phone, tablet or desktop — or clone the repo and run it
+locally (see [Quick start](#-quick-start-sqlite--no-docker)). External users can pick whichever they prefer.
+
 > **Disclaimer:** This is an educational / advisory modelling tool. Figures are estimates based
 > on configurable policy assumptions, **not** official CPF Board calculations. CPF LIFE payouts
 > in particular are a transparent annuity estimate, not the Board's pooled actuarial figure.
@@ -17,6 +27,7 @@ and explore "what-if" optimisations, all from a clean pastel UI.
 |-----|--------------|
 | **Overview** | Total CPF now, projected balances at 55 / 65 / 90, net-worth area chart, account breakdown, retirement-readiness score, CPF LIFE estimate, and a contributions-vs-interest growth chart. |
 | **Milestones** | When BHS, FRS and ERS are reached, how much more is needed today, plus a forward-projection slider (pick N years → projected target sums). |
+| **Ordinary Account (OA)** | Year scrubber: OA balance and 2.5% interest, exact OA contribution from salary, extra-interest tiers, the move into RA at 55, a monthly housing-withdrawal calculator, and an age-based top-up "what-if". |
 | **Medisave (MA)** | Year scrubber: MA balance vs BHS for any year, amount needed to hit BHS, MA interest earned, overflow routing once BHS is hit, and a MediSave-insurance drawdown calculator. |
 | **Special Account (SA)** | Year scrubber: progress to FRS / ERS, SA·RA interest and overflow, post-FRS compounding note, and a one-time top-up "what-if" recalculation. |
 | **Optimisation** | Scenario analysis, recommended strategies, and 5 tax-reduction calculators (SRS top-up, CPF cash top-up, charity 250% deduction, parent relief, voluntary housing refund). |
