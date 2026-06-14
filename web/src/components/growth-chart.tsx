@@ -41,7 +41,7 @@ export function GrowthChart({ years }: { years: YearRow[] }) {
             <XAxis dataKey="age" tick={{ fontSize: 12 }} />
             <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} width={40} />
             <Tooltip formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)} />
-            <Legend wrapperStyle={{ fontSize: "12px" }} />
+            <Legend wrapperStyle={{ fontSize: "12px" }} itemSorter={null} />
             {SERIES.map((s) => (
               <Line isAnimationActive={false}
                 key={s.key}

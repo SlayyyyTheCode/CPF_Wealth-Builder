@@ -27,7 +27,7 @@ export function AccountBreakdownChart({ years }: { years: YearRow[] }) {
               formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)}
               itemSorter={sortItems}
             />
-            <Legend />
+            <Legend itemSorter={null} />
             {(["OA", "SA", "MA", "RA"] as const).map((k) =>
               <Bar isAnimationActive={false} key={k} dataKey={k} stackId="1" fill={COLORS[k]} />)}
             <Line isAnimationActive={false} type="monotone" dataKey="Total" stroke={TOTAL_COLOR} strokeWidth={2.5} dot={false} />

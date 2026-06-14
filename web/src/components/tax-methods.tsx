@@ -17,6 +17,34 @@ const cardCls =
   "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)] flex flex-col gap-3";
 
 /* ------------------------------------------------------------------ */
+/* Singapore resident income-tax brackets (YA 2024 onwards).            */
+/* Each entry: lower bound, cumulative tax at that bound, marginal rate */
+/* on income above it. Mirrors the official "Gross Tax Payable" table.  */
+/* ------------------------------------------------------------------ */
+const TAX_BRACKETS = [
+  { lower: 0, cum: 0, rate: 0 },
+  { lower: 20000, cum: 0, rate: 0.02 },
+  { lower: 30000, cum: 200, rate: 0.035 },
+  { lower: 40000, cum: 550, rate: 0.07 },
+  { lower: 80000, cum: 3350, rate: 0.115 },
+  { lower: 120000, cum: 7950, rate: 0.15 },
+  { lower: 160000, cum: 13950, rate: 0.18 },
+  { lower: 200000, cum: 21150, rate: 0.19 },
+  { lower: 240000, cum: 28750, rate: 0.195 },
+  { lower: 280000, cum: 36550, rate: 0.2 },
+  { lower: 320000, cum: 44550, rate: 0.22 },
+  { lower: 500000, cum: 84150, rate: 0.23 },
+  { lower: 1000000, cum: 199150, rate: 0.24 },
+];
+
+function computeIncomeTax(income: number): { tax: number; marginal: number } {
+  if (income <= 0) return { tax: 0, marginal: 0 };
+  let b = TAX_BRACKETS[0];
+  for (const br of TAX_BRACKETS) if (income > br.lower) b = br;
+  return { tax: b.cum + (income - b.lower) * b.rate, marginal: b.rate };
+}
+
+/* ------------------------------------------------------------------ */
 /* Card 1 — SRS                                                         */
 /* ------------------------------------------------------------------ */
 function SrsCard({ income }: { income: number }) {
@@ -253,6 +281,8 @@ function AmountTaxCard({
 /* ------------------------------------------------------------------ */
 export function TaxMethods() {
   const [income, setIncome] = useState(100000);
+  const { tax, marginal } = computeIncomeTax(income);
+  const effectiveRate = income > 0 ? (tax / income) * 100 : 0;
 
   return (
     <section aria-label="5 ways to reduce tax">
@@ -262,20 +292,37 @@ export function TaxMethods() {
         interactive options below.
       </p>
 
-      {/* Shared income input */}
-      <div className="mb-5 max-w-xs">
-        <label htmlFor="tax-income" className="mb-1 block text-xs font-medium">
-          Annual assessable income (S$)
-        </label>
-        <input
-          id="tax-income"
-          type="number"
-          min={0}
-          value={income}
-          onChange={(e) => setIncome(Math.max(0, Number(e.target.value)))}
-          className={inputCls}
-          aria-label="Annual assessable income"
-        />
+      {/* Shared income input + live income-tax payable */}
+      <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:max-w-2xl">
+        <div>
+          <label htmlFor="tax-income" className="mb-1 block text-xs font-medium">
+            Annual assessable income (S$)
+          </label>
+          <input
+            id="tax-income"
+            type="number"
+            min={0}
+            value={income}
+            onChange={(e) => setIncome(Math.max(0, Number(e.target.value)))}
+            className={inputCls}
+            aria-label="Annual assessable income"
+          />
+        </div>
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3"
+        >
+          <p className="text-xs font-medium text-[var(--color-muted)]">
+            Income tax payable
+          </p>
+          <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--color-primary)]">
+            {sgd(tax)}
+          </p>
+          <p className="mt-0.5 text-xs text-[var(--color-muted)]">
+            Effective {effectiveRate.toFixed(2)}% · marginal {(marginal * 100).toFixed(1)}% · resident rates (YA 2024+)
+          </p>
+        </div>
       </div>
 
       {/* 5-card grid */}
