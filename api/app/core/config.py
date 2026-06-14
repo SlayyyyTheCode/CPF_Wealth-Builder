@@ -9,8 +9,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+psycopg://cpf:cpf@localhost:5432/cpf"
     CORS_ORIGINS: str = "http://localhost:3000"
     # Optional regex to allow a family of origins (e.g. all this project's Vercel
-    # preview/prod URLs) without listing each one.
-    CORS_ORIGIN_REGEX: str = r"https://.*\.vercel\.app"
+    # preview/prod URLs, plus any localhost port for local dev) without listing
+    # each one.
+    CORS_ORIGIN_REGEX: str = r"^(https://.*\.vercel\.app|http://localhost:\d+)$"
     ANTHROPIC_API_KEY: str = ""
 
     # --- Admin auth ---
