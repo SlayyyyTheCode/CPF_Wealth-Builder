@@ -47,8 +47,15 @@ function computeIncomeTax(income: number): { tax: number; marginal: number } {
 /* ------------------------------------------------------------------ */
 /* Card 1 — SRS                                                         */
 /* ------------------------------------------------------------------ */
-function SrsCard({ income }: { income: number }) {
-  const [amount, setAmount] = useState(15300);
+function SrsCard({
+  income,
+  amount,
+  setAmount,
+}: {
+  income: number;
+  amount: number;
+  setAmount: (n: number) => void;
+}) {
   const [result, setResult] = useState<TaxEstimate | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,7 +92,7 @@ function SrsCard({ income }: { income: number }) {
           min={0}
           max={15300}
           value={amount}
-          onChange={(e) => setAmount(Math.min(15300, Number(e.target.value)))}
+          onChange={(e) => setAmount(Math.min(15300, Math.max(0, Number(e.target.value))))}
           className={inputCls}
           aria-label="SRS top-up amount"
         />
@@ -113,8 +120,15 @@ function SrsCard({ income }: { income: number }) {
 /* ------------------------------------------------------------------ */
 /* Card 2 — CPF RSTU                                                    */
 /* ------------------------------------------------------------------ */
-function CpfTopupCard({ income }: { income: number }) {
-  const [amount, setAmount] = useState(8000);
+function CpfTopupCard({
+  income,
+  amount,
+  setAmount,
+}: {
+  income: number;
+  amount: number;
+  setAmount: (n: number) => void;
+}) {
   const [result, setResult] = useState<TaxRelief | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -151,7 +165,7 @@ function CpfTopupCard({ income }: { income: number }) {
           min={0}
           max={8000}
           value={amount}
-          onChange={(e) => setAmount(Math.min(8000, Number(e.target.value)))}
+          onChange={(e) => setAmount(Math.min(8000, Math.max(0, Number(e.target.value))))}
           className={inputCls}
           aria-label="CPF RSTU top-up amount"
         />
@@ -185,29 +199,31 @@ function CpfTopupCard({ income }: { income: number }) {
 /* deductible=false → no income-tax relief (voluntary housing refund).  */
 /* ------------------------------------------------------------------ */
 function AmountTaxCard({
+  uid,
   title,
   description,
   inputLabel,
-  defaultAmount,
+  amount,
+  setAmount,
   multiplier,
   income,
   deductible = true,
   note,
 }: {
+  uid: string;
   title: string;
   description: string;
   inputLabel: string;
-  defaultAmount: number;
+  amount: number;
+  setAmount: (n: number) => void;
   multiplier: number;
   income: number;
   deductible?: boolean;
   note?: string;
 }) {
-  const [amount, setAmount] = useState(defaultAmount);
   const [result, setResult] = useState<TaxEstimate | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const uid = title.replace(/\s+/g, "-").toLowerCase();
 
   async function estimate() {
     setErr(null);
@@ -277,15 +293,102 @@ function AmountTaxCard({
 }
 
 /* ------------------------------------------------------------------ */
+/* Card 6 — Estimated Tax After Deduction (aggregate of all reliefs)    */
+/* ------------------------------------------------------------------ */
+function TaxAfterDeductionCard({
+  income,
+  deductions,
+}: {
+  income: number;
+  deductions: { label: string; amount: number }[];
+}) {
+  const totalDeduction = deductions.reduce((s, d) => s + d.amount, 0);
+  const chargeable = Math.max(income - totalDeduction, 0);
+  const taxBefore = computeIncomeTax(income).tax;
+  const taxAfter = computeIncomeTax(chargeable).tax;
+  const saved = Math.max(taxBefore - taxAfter, 0);
+
+  return (
+    <div className={`${cardCls} border-[var(--color-primary)] sm:col-span-2 lg:col-span-3`}>
+      <div>
+        <h3 className="font-semibold">Estimated Tax After Deduction</h3>
+        <p className="mt-1 text-sm text-[var(--color-muted)]">
+          Combines every deductible relief above (SRS, CPF top-up, charity 2.5×,
+          parent relief) against your assessable income to show the total tax
+          saved. The voluntary housing refund is not income-tax deductible, so it
+          is excluded.
+        </p>
+      </div>
+
+      {/* Per-relief breakdown */}
+      <div className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm">
+        {deductions.map((d) => (
+          <div key={d.label} className="flex justify-between py-0.5">
+            <span className="text-[var(--color-muted)]">{d.label}</span>
+            <span className="tabular-nums">{sgd(d.amount)}</span>
+          </div>
+        ))}
+        <div className="mt-1 flex justify-between border-t border-[var(--color-border)] pt-1 font-medium">
+          <span>Total deductions</span>
+          <span className="tabular-nums">{sgd(totalDeduction)}</span>
+        </div>
+      </div>
+
+      {/* Result grid */}
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div>
+          <p className="text-xs text-[var(--color-muted)]">Assessable income</p>
+          <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(income)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--color-muted)]">Chargeable after deductions</p>
+          <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(chargeable)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--color-muted)]">Tax before → after</p>
+          <p className="mt-0.5 text-lg font-bold tabular-nums">
+            {sgd(taxBefore)} → {sgd(taxAfter)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-[var(--color-muted)]">Total tax saved</p>
+          <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+            {sgd(saved)}
+          </p>
+        </div>
+      </div>
+      <p className="text-xs text-[var(--color-muted)]">
+        Estimate using YA2024+ resident brackets. Reliefs are subject to caps and
+        the overall S$80,000 personal income-tax relief ceiling, not modelled here.
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Main export                                                           */
 /* ------------------------------------------------------------------ */
 export function TaxMethods() {
   const [income, setIncome] = useState(100000);
+  const [srs, setSrs] = useState(15300);
+  const [rstu, setRstu] = useState(8000);
+  const [charity, setCharity] = useState(1000);
+  const [parent, setParent] = useState(9000);
+  const [vhr, setVhr] = useState(20000);
+
   const { tax, marginal } = computeIncomeTax(income);
   const effectiveRate = income > 0 ? (tax / income) * 100 : 0;
 
+  // Deductible reliefs only (VHR excluded — not income-tax deductible).
+  const deductions = [
+    { label: "SRS top-up", amount: srs },
+    { label: "CPF cash top-up (RSTU)", amount: rstu },
+    { label: "Charity donation (2.5×)", amount: charity * 2.5 },
+    { label: "Parent relief", amount: parent },
+  ];
+
   return (
-    <section aria-label="5 ways to reduce tax">
+    <section aria-label="Ways to reduce tax">
       <h2 className="mb-1 text-base font-semibold">5 ways to reduce tax</h2>
       <p className="mb-4 text-sm text-[var(--color-muted)]">
         Enter your annual assessable income to get personalised estimates for the
@@ -325,36 +428,43 @@ export function TaxMethods() {
         </div>
       </div>
 
-      {/* 5-card grid */}
+      {/* card grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SrsCard income={income} />
-        <CpfTopupCard income={income} />
+        <SrsCard income={income} amount={srs} setAmount={setSrs} />
+        <CpfTopupCard income={income} amount={rstu} setAmount={setRstu} />
         <AmountTaxCard
+          uid="charity"
           income={income}
           title="Donate to charities"
           description="Donations to approved IPCs get a 250% tax deduction."
           inputLabel="Donation amount (S$)"
-          defaultAmount={1000}
+          amount={charity}
+          setAmount={setCharity}
           multiplier={2.5}
         />
         <AmountTaxCard
+          uid="parent-relief"
           income={income}
           title="Take care of your ageing parents"
           description="Parent Relief: up to S$9,000 per parent (S$14,000 if living with you); higher for Handicapped Parent Relief. Conditions apply."
           inputLabel="Parent relief claimed (S$)"
-          defaultAmount={9000}
+          amount={parent}
+          setAmount={setParent}
           multiplier={1}
         />
         <AmountTaxCard
+          uid="vhr"
           income={income}
           title="Voluntary housing refund"
           description="Refund CPF used for housing (principal + accrued interest) back to your OA."
           inputLabel="Refund amount (S$)"
-          defaultAmount={20000}
+          amount={vhr}
+          setAmount={setVhr}
           multiplier={1}
           deductible={false}
           note="A voluntary housing refund is not income-tax deductible, so it saves no income tax. It restores your CPF savings and the accrued interest, boosting your retirement nest egg."
         />
+        <TaxAfterDeductionCard income={income} deductions={deductions} />
       </div>
     </section>
   );
