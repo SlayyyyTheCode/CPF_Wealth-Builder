@@ -302,11 +302,33 @@ function TaxAfterDeductionCard({
   income: number;
   deductions: { label: string; amount: number }[];
 }) {
-  const totalDeduction = deductions.reduce((s, d) => s + d.amount, 0);
-  const chargeable = Math.max(income - totalDeduction, 0);
-  const taxBefore = computeIncomeTax(income).tax;
-  const taxAfter = computeIncomeTax(chargeable).tax;
-  const saved = Math.max(taxBefore - taxAfter, 0);
+  const [result, setResult] = useState<{
+    income: number;
+    breakdown: { label: string; amount: number }[];
+    totalDeduction: number;
+    chargeable: number;
+    taxBefore: number;
+    taxAfter: number;
+    saved: number;
+  } | null>(null);
+
+  // Snapshot the current income + reliefs on click.
+  function compute() {
+    const breakdown = deductions.map((d) => ({ ...d }));
+    const totalDeduction = breakdown.reduce((s, d) => s + d.amount, 0);
+    const chargeable = Math.max(income - totalDeduction, 0);
+    const taxBefore = computeIncomeTax(income).tax;
+    const taxAfter = computeIncomeTax(chargeable).tax;
+    setResult({
+      income,
+      breakdown,
+      totalDeduction,
+      chargeable,
+      taxBefore,
+      taxAfter,
+      saved: Math.max(taxBefore - taxAfter, 0),
+    });
+  }
 
   return (
     <div className={`${cardCls} border-[var(--color-primary)] sm:col-span-2 lg:col-span-3`}>
@@ -316,47 +338,56 @@ function TaxAfterDeductionCard({
           Combines every deductible relief above (SRS, CPF top-up, charity 2.5×,
           parent relief) against your assessable income to show the total tax
           saved. The voluntary housing refund is not income-tax deductible, so it
-          is excluded.
+          is excluded. Adjust any field above, then compute.
         </p>
       </div>
 
-      {/* Per-relief breakdown */}
-      <div className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm">
-        {deductions.map((d) => (
-          <div key={d.label} className="flex justify-between py-0.5">
-            <span className="text-[var(--color-muted)]">{d.label}</span>
-            <span className="tabular-nums">{sgd(d.amount)}</span>
-          </div>
-        ))}
-        <div className="mt-1 flex justify-between border-t border-[var(--color-border)] pt-1 font-medium">
-          <span>Total deductions</span>
-          <span className="tabular-nums">{sgd(totalDeduction)}</span>
-        </div>
-      </div>
+      <button onClick={compute} className={btnCls} aria-label="Compute estimated tax after deduction">
+        Compute
+      </button>
 
-      {/* Result grid */}
-      <div className="grid gap-3 sm:grid-cols-4">
-        <div>
-          <p className="text-xs text-[var(--color-muted)]">Assessable income</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(income)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--color-muted)]">Chargeable after deductions</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(chargeable)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--color-muted)]">Tax before → after</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums">
-            {sgd(taxBefore)} → {sgd(taxAfter)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs text-[var(--color-muted)]">Total tax saved</p>
-          <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
-            {sgd(saved)}
-          </p>
-        </div>
-      </div>
+      {result && (
+        <>
+          {/* Per-relief breakdown */}
+          <div className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm" role="status" aria-live="polite">
+            {result.breakdown.map((d) => (
+              <div key={d.label} className="flex justify-between py-0.5">
+                <span className="text-[var(--color-muted)]">{d.label}</span>
+                <span className="tabular-nums">{sgd(d.amount)}</span>
+              </div>
+            ))}
+            <div className="mt-1 flex justify-between border-t border-[var(--color-border)] pt-1 font-medium">
+              <span>Total deductions</span>
+              <span className="tabular-nums">{sgd(result.totalDeduction)}</span>
+            </div>
+          </div>
+
+          {/* Result grid */}
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Assessable income</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.income)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Chargeable after deductions</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.chargeable)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Tax before → after</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">
+                {sgd(result.taxBefore)} → {sgd(result.taxAfter)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Total tax saved</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                {sgd(result.saved)}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+
       <p className="text-xs text-[var(--color-muted)]">
         Estimate using YA2024+ resident brackets. Reliefs are subject to caps and
         the overall S$80,000 personal income-tax relief ceiling, not modelled here.
