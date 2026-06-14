@@ -297,37 +297,56 @@ function AmountTaxCard({
 /* ------------------------------------------------------------------ */
 function TaxAfterDeductionCard({
   income,
-  deductions,
+  srs,
+  rstu,
+  charity,
+  parent,
 }: {
   income: number;
-  deductions: { label: string; amount: number }[];
+  srs: number;
+  rstu: number;
+  charity: number;
+  parent: number;
 }) {
   const [result, setResult] = useState<{
     income: number;
-    breakdown: { label: string; amount: number }[];
+    rows: { label: string; deduction: number; saved: number }[];
     totalDeduction: number;
-    chargeable: number;
-    taxBefore: number;
-    taxAfter: number;
-    saved: number;
+    totalSaved: number;
   } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // Snapshot the current income + reliefs on click.
-  function compute() {
-    const breakdown = deductions.map((d) => ({ ...d }));
-    const totalDeduction = breakdown.reduce((s, d) => s + d.amount, 0);
-    const chargeable = Math.max(income - totalDeduction, 0);
-    const taxBefore = computeIncomeTax(income).tax;
-    const taxAfter = computeIncomeTax(chargeable).tax;
-    setResult({
-      income,
-      breakdown,
-      totalDeduction,
-      chargeable,
-      taxBefore,
-      taxAfter,
-      saved: Math.max(taxBefore - taxAfter, 0),
-    });
+  // Recompute each relief with the SAME backend endpoints the cards use, then
+  // sum — so each row matches its card's "Est. tax saved" exactly.
+  async function compute() {
+    setErr(null);
+    setLoading(true);
+    try {
+      const charityDed = charity * 2.5;
+      const [srsR, charityR, parentR, rstuR] = await Promise.all([
+        taxEstimate(income, srs),
+        taxEstimate(income, charityDed),
+        taxEstimate(income, parent),
+        taxReliefCalc({ income, rstu_self: rstu }),
+      ]);
+      const rows = [
+        { label: "SRS top-up", deduction: srs, saved: srsR.estimated_tax_saved },
+        { label: "CPF cash top-up (RSTU)", deduction: rstuR.relief_earned, saved: rstuR.estimated_tax_saved },
+        { label: "Charity donation (2.5×)", deduction: charityDed, saved: charityR.estimated_tax_saved },
+        { label: "Parent relief", deduction: parent, saved: parentR.estimated_tax_saved },
+      ];
+      setResult({
+        income,
+        rows,
+        totalDeduction: rows.reduce((s, r) => s + r.deduction, 0),
+        totalSaved: rows.reduce((s, r) => s + r.saved, 0),
+      });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -335,62 +354,77 @@ function TaxAfterDeductionCard({
       <div>
         <h3 className="font-semibold">Estimated Tax After Deduction</h3>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
-          Combines every deductible relief above (SRS, CPF top-up, charity 2.5×,
-          parent relief) against your assessable income to show the total tax
-          saved. The voluntary housing refund is not income-tax deductible, so it
-          is excluded. Adjust any field above, then compute.
+          Sums the tax saved from every deductible relief above (SRS, CPF top-up,
+          charity 2.5×, parent relief) so the total matches each card&apos;s
+          estimate. The voluntary housing refund is not income-tax deductible, so
+          it is excluded. Adjust any field above, then compute.
         </p>
       </div>
 
-      <button onClick={compute} className={btnCls} aria-label="Compute estimated tax after deduction">
-        Compute
+      <button onClick={compute} disabled={loading} className={btnCls} aria-label="Compute estimated tax after deduction">
+        {loading ? "Computing…" : "Compute"}
       </button>
 
       {result && (
         <>
-          {/* Per-relief breakdown */}
+          {/* Per-relief breakdown: deduction + matching tax saved */}
           <div className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm" role="status" aria-live="polite">
-            {result.breakdown.map((d) => (
-              <div key={d.label} className="flex justify-between py-0.5">
-                <span className="text-[var(--color-muted)]">{d.label}</span>
-                <span className="tabular-nums">{sgd(d.amount)}</span>
+            <div className="flex justify-between pb-1 text-xs font-medium text-[var(--color-muted)]">
+              <span>Relief</span>
+              <span className="flex gap-6">
+                <span className="w-20 text-right">Deduction</span>
+                <span className="w-20 text-right">Tax saved</span>
+              </span>
+            </div>
+            {result.rows.map((r) => (
+              <div key={r.label} className="flex justify-between py-0.5">
+                <span className="text-[var(--color-muted)]">{r.label}</span>
+                <span className="flex gap-6 tabular-nums">
+                  <span className="w-20 text-right">{sgd(r.deduction)}</span>
+                  <span className="w-20 text-right">{sgd(r.saved)}</span>
+                </span>
               </div>
             ))}
             <div className="mt-1 flex justify-between border-t border-[var(--color-border)] pt-1 font-medium">
-              <span>Total deductions</span>
-              <span className="tabular-nums">{sgd(result.totalDeduction)}</span>
+              <span>Total</span>
+              <span className="flex gap-6 tabular-nums">
+                <span className="w-20 text-right">{sgd(result.totalDeduction)}</span>
+                <span className="w-20 text-right text-[var(--color-primary)]">{sgd(result.totalSaved)}</span>
+              </span>
             </div>
           </div>
 
           {/* Result grid */}
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <p className="text-xs text-[var(--color-muted)]">Assessable income</p>
               <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.income)}</p>
             </div>
             <div>
-              <p className="text-xs text-[var(--color-muted)]">Chargeable after deductions</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.chargeable)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">Tax before → after</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">
-                {sgd(result.taxBefore)} → {sgd(result.taxAfter)}
-              </p>
+              <p className="text-xs text-[var(--color-muted)]">Total deductions applied</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.totalDeduction)}</p>
             </div>
             <div>
               <p className="text-xs text-[var(--color-muted)]">Total tax saved</p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
-                {sgd(result.saved)}
+                {sgd(result.totalSaved)}
               </p>
             </div>
           </div>
         </>
       )}
 
+      {err && (
+        <p role="alert" className="text-sm text-[var(--color-error)]">
+          {err}
+        </p>
+      )}
+
       <p className="text-xs text-[var(--color-muted)]">
-        Estimate using YA2024+ resident brackets. Reliefs are subject to caps and
-        the overall S$80,000 personal income-tax relief ceiling, not modelled here.
+        Each relief&apos;s tax saved is computed independently (the same way as its
+        card) and summed. Reliefs are subject to caps and the overall S$80,000
+        personal income-tax relief ceiling, not modelled here, so the combined
+        figure is an upper-bound estimate.
       </p>
     </div>
   );
@@ -409,14 +443,6 @@ export function TaxMethods() {
 
   const { tax, marginal } = computeIncomeTax(income);
   const effectiveRate = income > 0 ? (tax / income) * 100 : 0;
-
-  // Deductible reliefs only (VHR excluded — not income-tax deductible).
-  const deductions = [
-    { label: "SRS top-up", amount: srs },
-    { label: "CPF cash top-up (RSTU)", amount: rstu },
-    { label: "Charity donation (2.5×)", amount: charity * 2.5 },
-    { label: "Parent relief", amount: parent },
-  ];
 
   return (
     <section aria-label="Ways to reduce tax">
@@ -495,7 +521,7 @@ export function TaxMethods() {
           deductible={false}
           note="A voluntary housing refund is not income-tax deductible, so it saves no income tax. It restores your CPF savings and the accrued interest, boosting your retirement nest egg."
         />
-        <TaxAfterDeductionCard income={income} deductions={deductions} />
+        <TaxAfterDeductionCard income={income} srs={srs} rstu={rstu} charity={charity} parent={parent} />
       </div>
     </section>
   );
