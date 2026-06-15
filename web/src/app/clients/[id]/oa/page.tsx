@@ -107,6 +107,7 @@ export default function OaPage({
 
   // KPI values for the selected year
   const oaBalance = yr?.closing.OA ?? 0;
+  const oaOpening = yr?.opening?.OA ?? 0;
   const oaInterest = yr?.interest_by_account?.OA ?? 0;
   const extraInterest = yr ? oaExtraInterest(oaBalance, age) : 0;
   const combined = yr
@@ -202,8 +203,9 @@ export default function OaPage({
       {yr && (
         <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className={cardClass}>
-            <p className={labelClass}>OA balance</p>
-            <p className={kpiClass}>{sgd(oaBalance)}</p>
+            <p className={labelClass}>Current OA</p>
+            <p className={kpiClass}>{sgd(oaOpening)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">start of year</p>
           </div>
           <div className={cardClass}>
             <p className={labelClass}>OA interest earned</p>
@@ -218,9 +220,9 @@ export default function OaPage({
             </p>
           </div>
           <div className={cardClass}>
-            <p className={labelClass}>Combined CPF balance</p>
-            <p className={kpiClass}>{sgd(combined)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">OA + SA + MA + RA</p>
+            <p className={labelClass}>End of the year OA balance</p>
+            <p className={kpiClass}>{sgd(oaBalance)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
           </div>
         </div>
       )}
@@ -250,6 +252,13 @@ export default function OaPage({
           Employee + employer contribution flowing to OA this year (from the projection engine), on
           wage capped at the Ordinary Wage ceiling ({sgd(owCeiling)}/mth).
         </p>
+      </div>
+
+      {/* 3c. Combined CPF balance */}
+      <div className={`${cardClass} mb-4`}>
+        <p className={labelClass}>Combined CPF balance</p>
+        <p className={kpiClass}>{sgd(combined)}</p>
+        <p className="mt-1 text-xs text-[var(--color-muted)]">OA + SA + MA + RA (age {age})</p>
       </div>
 
       {/* 4. Extra-interest explainer */}
