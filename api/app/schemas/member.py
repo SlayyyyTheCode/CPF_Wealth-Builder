@@ -18,6 +18,7 @@ class MemberCreate(BaseModel):
     balances: Balances = Balances()
     housing_data: dict | None = None
     voluntary_top_ups: list | None = None
+    special_access: bool = False
 
 
 class MemberOut(MemberCreate):
@@ -31,6 +32,7 @@ class MemberUpdate(BaseModel):
     monthly_gross_wage: float | None = None
     employment_status: str | None = None
     balances: Balances | None = None
+    special_access: bool | None = None
 
 
 class MemberSummaryOut(BaseModel):

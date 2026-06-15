@@ -12,11 +12,16 @@ export default function ClientLayout({
 }) {
   const { id } = use(params);
   const [name, setName] = useState<string | undefined>(undefined);
+  const [specialAccess, setSpecialAccess] = useState(false);
 
   useEffect(() => {
     let ok = true;
     getMember(Number(id))
-      .then((m) => ok && setName(m.name))
+      .then((m) => {
+        if (!ok) return;
+        setName(m.name);
+        setSpecialAccess(!!m.special_access);
+      })
       .catch(() => {});
     return () => {
       ok = false;
@@ -24,7 +29,7 @@ export default function ClientLayout({
   }, [id]);
 
   return (
-    <AppShell clientId={id} clientName={name ?? "…"}>
+    <AppShell clientId={id} clientName={name ?? "…"} specialAccess={specialAccess}>
       {children}
     </AppShell>
   );

@@ -101,6 +101,21 @@ export function HousingIcon({ className }: IconProps) {
   );
 }
 
+/* CPF Millionaire — crown with shining gem */
+export function MillionaireIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} fill="none" aria-hidden="true">
+      <ellipse cx="24" cy="40" rx="14" ry="3" fill="currentColor" opacity="0.12" />
+      <path d="M9 16 L16 24 L24 12 L32 24 L39 16 L36 36 H12 Z" fill="var(--chart-4)" />
+      <path d="M9 16 L16 24 L24 12 L32 24 L39 16 L36 36 H12 Z" fill="none" stroke="currentColor" strokeOpacity="0.15" strokeWidth="1.5" strokeLinejoin="round" />
+      <rect x="12" y="36" width="24" height="4" rx="1.5" fill="var(--chart-1)" />
+      <circle className="anim-pulse-soft" cx="24" cy="22" r="3" fill="#fff" style={{ transformOrigin: "24px 22px" }} />
+      <circle cx="9" cy="16" r="2.5" fill="var(--chart-2)" />
+      <circle cx="39" cy="16" r="2.5" fill="var(--chart-2)" />
+    </svg>
+  );
+}
+
 /* Admin — shield with check */
 export function ShieldCheckIcon({ className }: IconProps) {
   return (

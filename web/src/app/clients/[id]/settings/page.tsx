@@ -20,6 +20,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const [sa, setSa] = useState("");
   const [ma, setMa] = useState("");
   const [ra, setRa] = useState("");
+  const [access, setAccess] = useState(false); // CPF Millionaire + self-edit access
 
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -39,6 +40,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         setSa(String(m.balances.SA));
         setMa(String(m.balances.MA));
         setRa(String(m.balances.RA));
+        setAccess(!!m.special_access);
       })
       .catch((e) => ok && setErr((e as Error).message));
     return () => { ok = false; };
@@ -72,6 +74,8 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         MA: Number(ma),
         RA: Number(ra),
       },
+      // Only the admin can grant/revoke access; the backend ignores it otherwise.
+      ...(isAdmin ? { special_access: access } : {}),
     };
 
     try {
@@ -93,6 +97,9 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const cardCls =
     "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]";
 
+  // Admin, or a member the admin granted special access, may edit + save.
+  const canEdit = isAdmin || !!member.special_access;
+
   return (
     <>
       <PageHeading
@@ -102,10 +109,38 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
       />
 
       <AdminBar isAdmin={isAdmin} onLogin={login} onLogout={logout} />
-      {!isAdmin && (
-        <p className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm text-[var(--color-muted)]">
-          Sign in as administrator to edit and save changes.
+      {!isAdmin && member.special_access && (
+        <p className="mb-4 rounded-xl border border-[var(--color-primary)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm">
+          ✓ This client has been granted access — you can edit and save the
+          profile and CPF balances below.
         </p>
+      )}
+      {!isAdmin && !member.special_access && (
+        <p className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm text-[var(--color-muted)]">
+          Sign in as administrator (or ask the administrator to grant access) to
+          edit and save changes.
+        </p>
+      )}
+
+      {/* Admin-only: grant CPF Millionaire + self-edit access */}
+      {isAdmin && (
+        <div className={`${cardCls} mb-4`}>
+          <h2 className="mb-2 text-base font-semibold">Access control</h2>
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={access}
+              onChange={(e) => setAccess(e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+              aria-label="Grant CPF Millionaire and self-edit access"
+            />
+            <span>
+              <span className="font-medium">Grant special access</span> — unlocks the
+              <span className="font-medium"> CPF Millionaire</span> tab for this client and lets
+              them edit their own Profile and CPF Balances here. Remember to Save.
+            </span>
+          </label>
+        </div>
       )}
 
       <form onSubmit={handleSave} className="grid gap-4 lg:grid-cols-2">
@@ -233,8 +268,8 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         <div className="lg:col-span-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <button
             type="submit"
-            disabled={busy || !isAdmin}
-            title={!isAdmin ? "Administrator sign-in required" : undefined}
+            disabled={busy || !canEdit}
+            title={!canEdit ? "Administrator sign-in or granted access required" : undefined}
             className="rounded-full bg-[var(--color-primary)] px-6 py-2 text-sm font-semibold text-white disabled:opacity-50 transition-opacity"
           >
             {busy ? "Saving…" : "Save changes"}

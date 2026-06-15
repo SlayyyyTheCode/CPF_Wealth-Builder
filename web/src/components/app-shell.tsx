@@ -1,14 +1,17 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { getToken } from "@/lib/api";
 import { ThemeToggle } from "./theme-toggle";
 
 interface TabDef {
   label: string;
-  href: string | null; // null = coming soon, no link
+  href: string | null; // null = locked / no link
+  locked?: boolean;    // true = gated (CPF Millionaire without access)
 }
 
-function buildTabs(clientId: string): TabDef[] {
+function buildTabs(clientId: string, millionaire: boolean): TabDef[] {
   return [
     { label: "Overview",            href: `/clients/${clientId}` },
     { label: "Milestones",          href: `/clients/${clientId}/milestones` },
@@ -16,7 +19,7 @@ function buildTabs(clientId: string): TabDef[] {
     { label: "Medisave (MA)",       href: `/clients/${clientId}/medisave` },
     { label: "Special Account (SA)", href: `/clients/${clientId}/sa` },
     { label: "Optimisation",        href: `/clients/${clientId}/optimisation` },
-    { label: "Housing",             href: null },
+    { label: "CPF Millionaire",     href: millionaire ? `/clients/${clientId}/millionaire` : null, locked: !millionaire },
     { label: "Settings",            href: `/clients/${clientId}/settings` },
   ];
 }
@@ -24,14 +27,20 @@ function buildTabs(clientId: string): TabDef[] {
 export function AppShell({
   clientId,
   clientName,
+  specialAccess = false,
   children,
 }: {
   clientId?: string;
   clientName?: string;
+  specialAccess?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const tabs = clientId ? buildTabs(clientId) : [];
+  // CPF Millionaire is unlocked for the admin or members granted special access.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { setIsAdmin(!!getToken()); }, [pathname]);
+  const millionaire = isAdmin || specialAccess;
+  const tabs = clientId ? buildTabs(clientId, millionaire) : [];
 
   return (
     <div className="min-h-screen">
@@ -77,8 +86,11 @@ export function AppShell({
                         {tab.label}
                       </Link>
                     ) : (
-                      <span className="inline-block whitespace-nowrap rounded-full px-4 py-1.5 text-white/50 cursor-default select-none">
-                        {tab.label} (soon)
+                      <span
+                        className="inline-block whitespace-nowrap rounded-full px-4 py-1.5 text-white/50 cursor-default select-none"
+                        title={tab.locked ? "Granted access required — ask the administrator" : undefined}
+                      >
+                        {tab.label} {tab.locked ? "🔒" : "(soon)"}
                       </span>
                     )}
                   </li>

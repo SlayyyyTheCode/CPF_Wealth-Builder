@@ -65,3 +65,16 @@ def require_admin(
     if payload.get("role") != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin role required")
     return payload.get("sub", "")
+
+
+def optional_admin(
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> bool:
+    """Dependency: True if a valid admin JWT is presented, else False (no raise)."""
+    if creds is None:
+        return False
+    try:
+        payload = jwt.decode(creds.credentials, settings.JWT_SECRET, algorithms=[_ALGO])
+    except jwt.PyJWTError:
+        return False
+    return payload.get("role") == "admin"

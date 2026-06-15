@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import String, Date, Numeric, JSON
+from sqlalchemy import String, Date, Numeric, JSON, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -17,3 +17,7 @@ class MemberProfile(Base):
     balances: Mapped[dict] = mapped_column(JSON)  # {"OA":..,"SA":..,"MA":..,"RA":..}
     housing_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     voluntary_top_ups: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # admin-granted access to the CPF Millionaire tab + self-edit of Settings
+    special_access: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )

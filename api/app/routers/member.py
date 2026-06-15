@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.models.member import MemberProfile
 from app.models.simulation import SimulationRun
 from app.schemas.member import MemberCreate, MemberOut, MemberSummaryOut, MemberUpdate
-from app.core.security import require_admin
+from app.core.security import require_admin, optional_admin
 
 router = APIRouter(prefix="/members", tags=["members"])
 
@@ -75,11 +75,26 @@ def delete_member(member_id: int, db: Session = Depends(get_db), _: str = Depend
 
 
 @router.put("/{member_id}", response_model=MemberOut)
-def update_member(member_id: int, payload: MemberUpdate, db: Session = Depends(get_db), _: str = Depends(require_admin)):
+def update_member(
+    member_id: int,
+    payload: MemberUpdate,
+    db: Session = Depends(get_db),
+    is_admin: bool = Depends(optional_admin),
+):
     m = db.get(MemberProfile, member_id)
     if not m:
         raise HTTPException(404, "Member not found")
+    # Editable by the admin, or by a member the admin has granted special access.
+    if not is_admin and not m.special_access:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Administrator sign-in or granted access required to edit this client",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     data = payload.model_dump(exclude_unset=True)
+    # Only the admin may grant/revoke the access flag.
+    if not is_admin:
+        data.pop("special_access", None)
     if "balances" in data and data["balances"] is not None:
         m.balances = data.pop("balances")
     else:
