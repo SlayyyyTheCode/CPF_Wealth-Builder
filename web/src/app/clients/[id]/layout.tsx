@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
-import { getMember } from "@/lib/api";
+import { getMember, warmClient } from "@/lib/api";
 
 export default function ClientLayout({
   children,
@@ -16,6 +16,9 @@ export default function ClientLayout({
 
   useEffect(() => {
     let ok = true;
+    // Warm the shared 91-year projection + active policy immediately on entry so
+    // the first tab (and every later one) reuses the cached result.
+    warmClient(Number(id));
     getMember(Number(id))
       .then((m) => {
         if (!ok) return;

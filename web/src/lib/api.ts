@@ -25,6 +25,7 @@ function invalidate(prefix: string) {
 function invalidateMember(id: number) {
   invalidate(`member:${id}`);
   invalidate(`sim:${id}:`);
+  invalidate(`analysis:${id}:`);
   invalidate("members");
 }
 
@@ -94,7 +95,15 @@ export const simulate = (id: number, end_age = 90) =>
   cached(`sim:${id}:${end_age}`, () =>
     apiPost<SimRun>(`/members/${id}/simulate`, { end_age, persist: false }));
 export const getAnalysis = (id: number, body: Record<string, unknown> = {}) =>
-  apiPost<Analysis>(`/members/${id}/analysis`, body);
+  cached(`analysis:${id}:${JSON.stringify(body)}`, () =>
+    apiPost<Analysis>(`/members/${id}/analysis`, body));
+
+// Kick off the shared projection + active policy as early as possible (on
+// entering a client) so every tab reuses one cached result. Fire-and-forget.
+export function warmClient(id: number) {
+  simulate(id, 91).catch(() => {});
+  getActivePolicy(new Date().getFullYear()).catch(() => {});
+}
 
 export async function ingestPolicy(file: File): Promise<IngestResult> {
   const fd = new FormData();
