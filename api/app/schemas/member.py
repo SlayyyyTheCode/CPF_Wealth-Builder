@@ -19,11 +19,21 @@ class MemberCreate(BaseModel):
     housing_data: dict | None = None
     voluntary_top_ups: list | None = None
     special_access: bool = False
+    password: str | None = None  # optional per-client password (input only)
 
 
-class MemberOut(MemberCreate):
+class MemberOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    name: str
+    dob: date
+    monthly_gross_wage: float
+    employment_status: str = "employee"
+    balances: Balances = Balances()
+    housing_data: dict | None = None
+    voluntary_top_ups: list | None = None
+    special_access: bool = False
+    has_password: bool = False  # never expose the hash
 
 
 class MemberUpdate(BaseModel):
@@ -34,6 +44,11 @@ class MemberUpdate(BaseModel):
     balances: Balances | None = None
     housing_data: dict | None = None
     special_access: bool | None = None
+    password: str | None = None  # set/replace per-client password
+
+
+class PasswordVerify(BaseModel):
+    password: str
 
 
 class MemberSummaryOut(BaseModel):
@@ -43,3 +58,4 @@ class MemberSummaryOut(BaseModel):
     employment_status: str
     current_total: float
     latest_run: dict | None
+    has_password: bool = False

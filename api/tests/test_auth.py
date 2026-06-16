@@ -24,8 +24,9 @@ def test_login_bad_username_401(anon_client):
     assert r.status_code == 401
 
 
-def test_create_member_requires_auth(anon_client):
-    assert anon_client.post("/members", json=_member()).status_code == 401
+def test_create_member_public(anon_client):
+    # Any user may create their own client profile (no admin).
+    assert anon_client.post("/members", json=_member()).status_code == 201
 
 
 def test_delete_member_requires_auth(client, anon_client):
@@ -33,9 +34,20 @@ def test_delete_member_requires_auth(client, anon_client):
     assert anon_client.delete(f"/members/{mid}").status_code == 401
 
 
-def test_update_member_requires_auth(client, anon_client):
-    mid = client.post("/members", json=_member()).json()["id"]
-    assert anon_client.put(f"/members/{mid}", json={"name": "x"}).status_code == 401
+def test_update_member_public_but_special_access_admin_only(client, anon_client):
+    mid = anon_client.post("/members", json=_member()).json()["id"]
+    # public edit of own values works
+    assert anon_client.put(f"/members/{mid}", json={"name": "x"}).status_code == 200
+    # special_access cannot be self-granted by a non-admin
+    anon_client.put(f"/members/{mid}", json={"special_access": True})
+    assert anon_client.get(f"/members/{mid}").json()["special_access"] is False
+
+
+def test_member_password_gate(anon_client):
+    mid = anon_client.post("/members", json={**_member(), "password": "secret1"}).json()["id"]
+    assert anon_client.get(f"/members/{mid}").json()["has_password"] is True
+    assert anon_client.post(f"/members/{mid}/verify-password", json={"password": "secret1"}).json()["ok"] is True
+    assert anon_client.post(f"/members/{mid}/verify-password", json={"password": "nope"}).json()["ok"] is False
 
 
 def test_public_can_read_and_simulate(client, anon_client):
@@ -53,8 +65,9 @@ def test_login_then_use_token(anon_client):
     assert r.status_code == 201
 
 
-def test_invalid_token_rejected(anon_client):
-    r = anon_client.post(
-        "/members", json=_member(), headers={"Authorization": "Bearer garbage.token.here"}
+def test_invalid_token_rejected_on_delete(client, anon_client):
+    mid = client.post("/members", json=_member()).json()["id"]
+    r = anon_client.delete(
+        f"/members/{mid}", headers={"Authorization": "Bearer garbage.token.here"}
     )
     assert r.status_code == 401

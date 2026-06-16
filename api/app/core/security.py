@@ -17,6 +17,17 @@ _bearer = HTTPBearer(auto_error=False)
 _ALGO = "HS256"
 
 
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode(), password_hash.encode())
+    except ValueError:
+        return False
+
+
 def verify_admin(username: str, password: str) -> bool:
     if not secrets.compare_digest(username, settings.ADMIN_USERNAME):
         return False

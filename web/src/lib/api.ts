@@ -120,6 +120,8 @@ export const createSnapshot = (body: Record<string, unknown>) =>
 export const approveSnapshot = (id: number) =>
   apiPost<{ id: number; status: string }>(`/policy/snapshots/${id}/approve`, {});
 
+export const verifyMemberPassword = (id: number, password: string) =>
+  apiPost<{ ok: boolean }>(`/members/${id}/verify-password`, { password });
 export const updateMember = (id: number, body: MemberUpdate) =>
   apiPut<Member>(`/members/${id}`, body).then((r) => { invalidateMember(id); return r; });
 export const simulateWhatIf = (id: number, body: Record<string, unknown>) =>

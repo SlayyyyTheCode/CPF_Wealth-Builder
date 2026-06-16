@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.member import MemberProfile
 from app.models.simulation import SimulationRun
-from app.schemas.member import MemberCreate, MemberOut, MemberSummaryOut, MemberUpdate
-from app.core.security import require_admin, optional_admin
+from app.schemas.member import (
+    MemberCreate, MemberOut, MemberSummaryOut, MemberUpdate, PasswordVerify,
+)
+from app.core.security import require_admin, optional_admin, hash_password, verify_password
 
 router = APIRouter(prefix="/members", tags=["members"])
 
@@ -36,19 +38,34 @@ def list_members(db: Session = Depends(get_db)):
             "id": m.id, "name": m.name, "dob": m.dob,
             "employment_status": m.employment_status,
             "current_total": current_total, "latest_run": latest,
+            "has_password": m.has_password,
         })
     return out
 
 
 @router.post("", response_model=MemberOut, status_code=status.HTTP_201_CREATED)
-def create_member(payload: MemberCreate, db: Session = Depends(get_db), _: str = Depends(require_admin)):
+def create_member(payload: MemberCreate, db: Session = Depends(get_db)):
+    # Any user may create their own client profile (no admin required).
     data = payload.model_dump()
     data["balances"] = payload.balances.model_dump()
+    pw = data.pop("password", None)
     m = MemberProfile(**data)
+    if pw:
+        m.password_hash = hash_password(pw)
     db.add(m)
     db.commit()
     db.refresh(m)
     return m
+
+
+@router.post("/{member_id}/verify-password")
+def verify_member_password(member_id: int, payload: PasswordVerify, db: Session = Depends(get_db)):
+    m = db.get(MemberProfile, member_id)
+    if not m:
+        raise HTTPException(404, "Member not found")
+    if not m.password_hash:
+        return {"ok": True}  # no password set → open
+    return {"ok": verify_password(payload.password, m.password_hash)}
 
 
 @router.get("/{member_id}", response_model=MemberOut)
@@ -84,17 +101,15 @@ def update_member(
     m = db.get(MemberProfile, member_id)
     if not m:
         raise HTTPException(404, "Member not found")
-    # Editable by the admin, or by a member the admin has granted special access.
-    if not is_admin and not m.special_access:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Administrator sign-in or granted access required to edit this client",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # Any user may edit their own client's values via Settings. Only the admin
+    # may grant/revoke CPF Millionaire access (special_access).
     data = payload.model_dump(exclude_unset=True)
-    # Only the admin may grant/revoke the access flag.
     if not is_admin:
         data.pop("special_access", None)
+    # Optional per-client password set/replace (hash it; never store plaintext).
+    pw = data.pop("password", None)
+    if pw is not None:
+        m.password_hash = hash_password(pw) if pw else None
     if "balances" in data and data["balances"] is not None:
         m.balances = data.pop("balances")
     else:

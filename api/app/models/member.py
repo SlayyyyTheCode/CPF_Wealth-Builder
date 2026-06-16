@@ -21,3 +21,9 @@ class MemberProfile(Base):
     special_access: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # optional per-client password (bcrypt) — app-level gate to open the client
+    password_hash: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    @property
+    def has_password(self) -> bool:
+        return bool(self.password_hash)

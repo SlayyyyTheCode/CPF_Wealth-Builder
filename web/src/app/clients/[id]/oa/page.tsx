@@ -379,7 +379,8 @@ export default function OaPage({
               type="number"
               min={0}
               step={50}
-              value={withdrawMth}
+              value={withdrawMth || ""}
+              placeholder="0"
               onChange={(e) => setWithdrawMth(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Monthly amount withdrawn from OA for housing"
@@ -411,7 +412,8 @@ export default function OaPage({
               min={0}
               max={11}
               step={1}
-              value={drawMonths}
+              value={drawMonths || ""}
+              placeholder="0"
               onChange={(e) => setDrawMonths(Math.max(0, Math.min(11, Number(e.target.value))))}
               className={inputClass}
               aria-label="Additional months to project"
@@ -520,7 +522,8 @@ export default function OaPage({
               type="number"
               min={0}
               step={1000}
-              value={topup}
+              value={topup || ""}
+              placeholder="0"
               onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Yearly OA top-up amount in Singapore dollars"

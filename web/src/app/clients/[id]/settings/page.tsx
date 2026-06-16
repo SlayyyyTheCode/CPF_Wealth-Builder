@@ -2,7 +2,7 @@
 import { use, useEffect, useState } from "react";
 import { getMember, updateMember } from "@/lib/api";
 import type { Member, MemberUpdate } from "@/lib/types";
-import { dobMMYYYY } from "@/lib/format";
+import { dobMMYYYY, ageFromDob } from "@/lib/format";
 import { PageHeading, SettingsIcon } from "@/components/icons";
 import { AdminBar } from "@/components/admin-bar";
 import { useAdmin } from "@/lib/admin";
@@ -22,6 +22,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const [ma, setMa] = useState("");
   const [ra, setRa] = useState("");
   const [mortgage, setMortgage] = useState(""); // monthly housing mortgage → OA calc
+  const [password, setPassword] = useState(""); // set/replace per-client password
   const [access, setAccess] = useState(false); // CPF Millionaire + self-edit access
 
   const [busy, setBusy] = useState(false);
@@ -75,9 +76,11 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         OA: Number(oa),
         SA: Number(sa),
         MA: Number(ma),
-        RA: Number(ra),
+        RA: member && ageFromDob(member.dob) < 55 ? 0 : Number(ra),
       },
       housing_data: { monthly_mortgage: Number(mortgage) || 0 },
+      // Only set the password when the user typed a new one.
+      ...(password ? { password } : {}),
       // Only the admin can grant/revoke access; the backend ignores it otherwise.
       ...(isAdmin ? { special_access: access } : {}),
     };
@@ -101,8 +104,10 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const cardCls =
     "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]";
 
-  // Admin, or a member the admin granted special access, may edit + save.
-  const canEdit = isAdmin || !!member.special_access;
+  // Any signed-in user may edit a client's values (per the app's access model).
+  const canEdit = true;
+  // RA only forms at age 55 — lock it to $0 for younger clients.
+  const raLocked = ageFromDob(member.dob) < 55;
 
   return (
     <>
@@ -113,20 +118,12 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
       />
 
       <AdminBar isAdmin={isAdmin} onLogin={login} onLogout={logout} />
-      {!isAdmin && member.special_access && (
-        <p className="mb-4 rounded-xl border border-[var(--color-primary)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm">
-          ✓ This client has been granted access — you can edit and save the
-          profile and CPF balances below.
-        </p>
-      )}
-      {!isAdmin && !member.special_access && (
-        <p className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm text-[var(--color-muted)]">
-          Sign in as administrator (or ask the administrator to grant access) to
-          edit and save changes.
-        </p>
-      )}
+      <p className="mb-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-sm text-[var(--color-muted)]">
+        Edit this client&apos;s profile and CPF balances below. CPF Millionaire access is granted
+        by a system administrator.
+      </p>
 
-      {/* Admin-only: grant CPF Millionaire + self-edit access */}
+      {/* Admin-only: grant CPF Millionaire access */}
       {isAdmin && (
         <div className={`${cardCls} mb-4`}>
           <h2 className="mb-2 text-base font-semibold">Access control</h2>
@@ -212,6 +209,24 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div>
+              <label htmlFor="cpw" className={labelCls}>Password (optional)</label>
+              <input
+                id="cpw"
+                type="password"
+                autoComplete="new-password"
+                className={inputCls}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={!canEdit}
+                placeholder={member.has_password ? "•••••• (set — type to change)" : "Set a password to protect this client"}
+                aria-label="Client password"
+              />
+              <p className="mt-1 text-xs text-[var(--color-muted)]">
+                Protects this client&apos;s dashboard. Leave blank to keep the current password.
+              </p>
+            </div>
+
+            <div>
               <p className={labelCls}>Date of birth (MM/YYYY)</p>
               <p className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-muted)]">
                 {dobMMYYYY(member.dob)}
@@ -277,11 +292,16 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                 min="0"
                 step="0.01"
                 className={inputCls}
-                value={ra}
+                value={raLocked ? 0 : ra}
                 onChange={(e) => setRa(e.target.value)}
-                required
-                aria-required="true"
+                disabled={raLocked}
+                aria-label="Current RA amount"
               />
+              {raLocked && (
+                <p className="mt-1 text-xs text-[var(--color-muted)]">
+                  RA forms only at age 55 — $0 until then.
+                </p>
+              )}
             </div>
           </div>
         </div>

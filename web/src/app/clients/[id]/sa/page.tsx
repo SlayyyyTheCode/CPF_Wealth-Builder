@@ -463,7 +463,8 @@ export default function SaPage({
               type="number"
               min={0}
               step={1000}
-              value={topup}
+              value={topup || ""}
+              placeholder="0"
               onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Yearly SA top-up amount in Singapore dollars"

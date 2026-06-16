@@ -50,7 +50,9 @@ export function ClientCard({
       )}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-semibold">{m.name}</div>
+          <div className="font-semibold">
+            {m.name}{m.has_password && <span title="Password protected" aria-label="Password protected"> 🔒</span>}
+          </div>
           <div className="text-sm text-[var(--color-muted)]">
             Age {ageFromDob(m.dob)} · {m.employment_status}
           </div>

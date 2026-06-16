@@ -363,7 +363,8 @@ export default function MedisavePage({
               type="number"
               min={0}
               step={100}
-              value={withdraw}
+              value={withdraw || ""}
+              placeholder="0"
               onChange={(e) => setWithdraw(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Amount withdrawn from MediSave now"
@@ -488,7 +489,8 @@ export default function MedisavePage({
               type="number"
               min={0}
               step={1000}
-              value={topup}
+              value={topup || ""}
+              placeholder="0"
               onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Yearly MA top-up amount in Singapore dollars"

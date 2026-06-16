@@ -7,13 +7,14 @@ export interface LatestRun {
 export interface MemberSummary {
   id: number; name: string; dob: string;
   employment_status: string; current_total: number; latest_run: LatestRun | null;
+  has_password?: boolean;
 }
 export interface Balances { OA: number; SA: number; MA: number; RA: number; }
 export interface HousingData { monthly_mortgage?: number }
 export interface Member {
   id: number; name: string; dob: string; monthly_gross_wage: number;
   employment_status: string; balances: Balances; special_access?: boolean;
-  housing_data?: HousingData | null;
+  housing_data?: HousingData | null; has_password?: boolean;
 }
 export interface YearRow {
   year: number; age: number;
@@ -45,6 +46,7 @@ export interface SimRun { id: number; member_id: number; result: SimResult; }
 export interface NewMember {
   name: string; dob: string; monthly_gross_wage: number;
   employment_status: string; balances: Balances; housing_data?: HousingData | null;
+  password?: string;
 }
 export interface Strategy {
   name: string; trigger_met: boolean;
@@ -61,7 +63,7 @@ export interface PolicyCore {
 export interface DiffRow { field: string; current: number | null; extracted: number | null; changed: boolean; }
 export interface IngestResult { extracted: PolicyCore; diff: DiffRow[]; carried_forward: Record<string, unknown>; }
 export interface SnapshotListItem { id: number; effective_year: number; status: string; created_at: string; approved_at: string | null; }
-export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?: number; employment_status?: string; balances?: Balances; special_access?: boolean; housing_data?: HousingData | null; }
+export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?: number; employment_status?: string; balances?: Balances; special_access?: boolean; housing_data?: HousingData | null; password?: string; }
 export interface TaxEstimate { estimated_tax_saved: number; marginal_rate: number; }
 export interface TaxRelief { relief_earned: number; remaining_cap: number; estimated_tax_saved: number; marginal_rate: number; }
 export interface Assumptions {

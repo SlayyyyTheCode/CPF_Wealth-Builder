@@ -453,7 +453,7 @@ function CpfisCard({ member }: { member: Member }) {
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="cp-amt" className="mb-1 block text-xs font-medium">Amount invested from OA (S$)</label>
-          <input id="cp-amt" type="number" min={0} step={1000} value={invested}
+          <input id="cp-amt" type="number" min={0} step={1000} value={invested || ""} placeholder="0"
             onChange={(e) => setInvested(Math.max(0, Number(e.target.value)))} className={inputClass}
             aria-label="Amount invested from OA" />
         </div>
@@ -681,7 +681,7 @@ function OptimizerSection({
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="opt-invest" className="mb-1 block text-xs font-medium">Amount to invest via CPFIS (S$)</label>
-          <input id="opt-invest" type="number" min={0} step={5000} value={investAmt}
+          <input id="opt-invest" type="number" min={0} step={5000} value={investAmt || ""} placeholder="0"
             onChange={(e) => setInvestAmt(Math.max(0, Number(e.target.value)))} className={inputClass}
             aria-label="Amount to invest via CPFIS" />
           <p className="mt-1 text-xs text-[var(--color-muted)]">
@@ -859,7 +859,7 @@ function WithdrawalTimeline({
         </div>
         <div>
           <label htmlFor="wt-invest" className="mb-1 block text-xs font-medium">Invest via CPFIS (S$)</label>
-          <input id="wt-invest" type="number" min={0} step={5000} value={investAmt}
+          <input id="wt-invest" type="number" min={0} step={5000} value={investAmt || ""} placeholder="0"
             onChange={(e) => setInvestAmt(Math.max(0, Number(e.target.value)))}
             className={inputClass} aria-label="Amount to invest via CPFIS" />
         </div>
