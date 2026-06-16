@@ -32,6 +32,7 @@ class MemberUpdate(BaseModel):
     monthly_gross_wage: float | None = None
     employment_status: str | None = None
     balances: Balances | None = None
+    housing_data: dict | None = None
     special_access: bool | None = None
 
 

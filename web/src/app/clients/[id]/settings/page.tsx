@@ -2,6 +2,7 @@
 import { use, useEffect, useState } from "react";
 import { getMember, updateMember } from "@/lib/api";
 import type { Member, MemberUpdate } from "@/lib/types";
+import { dobMMYYYY } from "@/lib/format";
 import { PageHeading, SettingsIcon } from "@/components/icons";
 import { AdminBar } from "@/components/admin-bar";
 import { useAdmin } from "@/lib/admin";
@@ -20,6 +21,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const [sa, setSa] = useState("");
   const [ma, setMa] = useState("");
   const [ra, setRa] = useState("");
+  const [mortgage, setMortgage] = useState(""); // monthly housing mortgage → OA calc
   const [access, setAccess] = useState(false); // CPF Millionaire + self-edit access
 
   const [busy, setBusy] = useState(false);
@@ -40,6 +42,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         setSa(String(m.balances.SA));
         setMa(String(m.balances.MA));
         setRa(String(m.balances.RA));
+        setMortgage(String(m.housing_data?.monthly_mortgage ?? 0));
         setAccess(!!m.special_access);
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -74,6 +77,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         MA: Number(ma),
         RA: Number(ra),
       },
+      housing_data: { monthly_mortgage: Number(mortgage) || 0 },
       // Only the admin can grant/revoke access; the backend ignores it otherwise.
       ...(isAdmin ? { special_access: access } : {}),
     };
@@ -190,9 +194,27 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div>
-              <p className={labelCls}>Date of birth</p>
+              <label htmlFor="mortgage" className={labelCls}>Monthly housing mortgage (SGD)</label>
+              <input
+                id="mortgage"
+                type="number"
+                min="0"
+                step="1"
+                className={inputCls}
+                value={mortgage}
+                onChange={(e) => setMortgage(e.target.value)}
+                disabled={!canEdit}
+                aria-label="Monthly housing mortgage"
+              />
+              <p className="mt-1 text-xs text-[var(--color-muted)]">
+                Prefills the OA housing-withdrawal calculator.
+              </p>
+            </div>
+
+            <div>
+              <p className={labelCls}>Date of birth (MM/YYYY)</p>
               <p className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-muted)]">
-                {member.dob}
+                {dobMMYYYY(member.dob)}
               </p>
             </div>
           </div>
@@ -203,7 +225,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
           <h2 className="mb-4 text-base font-semibold">CPF Balances</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="oa" className={labelCls}>Ordinary Account (OA)</label>
+              <label htmlFor="oa" className={labelCls}>Current OA Amount</label>
               <input
                 id="oa"
                 type="number"
@@ -218,7 +240,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div>
-              <label htmlFor="sa" className={labelCls}>Special Account (SA)</label>
+              <label htmlFor="sa" className={labelCls}>Current SA Amount</label>
               <input
                 id="sa"
                 type="number"
@@ -233,7 +255,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div>
-              <label htmlFor="ma" className={labelCls}>MediSave Account (MA)</label>
+              <label htmlFor="ma" className={labelCls}>Current MA Amount</label>
               <input
                 id="ma"
                 type="number"
@@ -248,7 +270,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div>
-              <label htmlFor="ra" className={labelCls}>Retirement Account (RA)</label>
+              <label htmlFor="ra" className={labelCls}>Current RA Amount</label>
               <input
                 id="ra"
                 type="number"

@@ -22,6 +22,12 @@ export const sgdCompact = (n: number | null | undefined): string => {
   return `${sign}$${Math.round(abs)}`;
 };
 
+// ISO date "YYYY-MM-DD" → "MM/YYYY" (month precision for birth date).
+export const dobMMYYYY = (dob: string): string => {
+  const m = /^(\d{4})-(\d{2})/.exec(dob);
+  return m ? `${m[2]}/${m[1]}` : dob;
+};
+
 export const ageFromDob = (dob: string): number => {
   const d = new Date(dob);
   const now = new Date();

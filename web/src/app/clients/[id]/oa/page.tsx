@@ -71,6 +71,8 @@ export default function OaPage({
         setRes(r.result);
         setMember(m);
         setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
+        // Prefill the housing-withdrawal calculator from the client's monthly mortgage.
+        setWithdrawMth(Math.max(0, Math.round(m.housing_data?.monthly_mortgage ?? 0)));
         if (r.result.years.length > 0) {
           setAge(r.result.years[0].age);
           setOaNow(Math.round(r.result.years[0].closing.OA));

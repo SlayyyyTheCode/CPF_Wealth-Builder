@@ -6,6 +6,7 @@ import type { NewMember } from "@/lib/types";
 const EMPTY: NewMember = {
   name: "", dob: "", monthly_gross_wage: 0, employment_status: "employee",
   balances: { OA: 0, SA: 0, MA: 0, RA: 0 },
+  housing_data: { monthly_mortgage: 0 },
 };
 
 export function MemberFormDialog({
@@ -31,7 +32,9 @@ export function MemberFormDialog({
     e.preventDefault();
     if (!valid) { setErr("Name, date of birth and wage are required."); return; }
     setBusy(true); setErr(null);
-    try { await createMember(f); setF(EMPTY); onCreated(); }
+    // DOB entered as month (YYYY-MM) → store as a real date (first of the month).
+    const payload = { ...f, dob: /^\d{4}-\d{2}$/.test(f.dob) ? `${f.dob}-01` : f.dob };
+    try { await createMember(payload); setF(EMPTY); onCreated(); }
     catch (e2) { setErr((e2 as Error).message); }
     finally { setBusy(false); }
   }
@@ -67,9 +70,9 @@ export function MemberFormDialog({
             />
           </label>
           <label className="text-sm">
-            Date of birth
+            Date of birth (MM/YYYY)
             <input
-              type="date"
+              type="month"
               className={field}
               value={f.dob}
               onChange={(e) => setF({ ...f, dob: e.target.value })}
@@ -84,6 +87,18 @@ export function MemberFormDialog({
               value={f.monthly_gross_wage}
               onChange={(e) =>
                 setF({ ...f, monthly_gross_wage: Number(e.target.value) })
+              }
+            />
+          </label>
+          <label className="text-sm">
+            Monthly housing mortgage (S$)
+            <input
+              type="number"
+              min={0}
+              className={field}
+              value={f.housing_data?.monthly_mortgage ?? 0}
+              onChange={(e) =>
+                setF({ ...f, housing_data: { monthly_mortgage: Math.max(0, Number(e.target.value)) } })
               }
             />
           </label>
@@ -102,7 +117,7 @@ export function MemberFormDialog({
           </label>
           {(["OA", "SA", "MA", "RA"] as const).map((k) => (
             <label key={k} className="text-sm">
-              {k} balance
+              Current {k} Amount
               <input
                 type="number"
                 min={0}
