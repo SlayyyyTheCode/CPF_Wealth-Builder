@@ -136,6 +136,7 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
       <TransferCard member={member} frs={proj(frs, currentYear)} bhs={bhs} />
       <CpfisCard member={member} />
       <WhatIfCard ers={ers} proj={proj} yearForAge={yearForAge} memberRa={member.balances.RA} currentAge={currentAge} />
+      <OptimizerSection member={member} ers={ers} bhs={bhs} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
 
       <p className="mt-2 text-xs text-[var(--color-muted)]">
         Figures are a transparent annuity estimate, not CPF Board&apos;s pooled actuarial payout.
@@ -588,6 +589,152 @@ function WhatIfCard({
       <p className="mt-2 text-xs text-[var(--color-muted)]">
         RA shown growing at 4% to age 90. Once payouts begin, CPF LIFE annuitises the RA — the table
         gives the first-month payout for each start age.
+      </p>
+    </section>
+  );
+}
+
+// ── 6. Optimizer ────────────────────────────────────────────────────────────────
+type ScenarioRow = {
+  label: string; rate: number; wealth: number; cpfLife: number; selfDrawn: number;
+  total: number; age: number;
+};
+
+function OptimizerSection({
+  member, ers, bhs, proj, yearForAge, currentAge,
+}: {
+  member: Member; ers: number; bhs: number;
+  proj: (b: number, y: number) => number; yearForAge: (a: number) => number; currentAge: number;
+}) {
+  const [rows, setRows] = useState<ScenarioRow[] | null>(null);
+  const [chart, setChart] = useState<{ age: number; wealth: number }[] | null>(null);
+
+  const SCENARIOS = [
+    { label: "Conservative", rate: 0.04 },
+    { label: "Moderate", rate: 0.06 },
+    { label: "Aggressive", rate: 0.08 },
+  ];
+
+  // RA at a given payout age on the ERS-by-55 path (top-up to ERS, then 4%).
+  const ersAt55 = proj(ers, yearForAge(55));
+  const raAtAge = (a: number) => ersAt55 * (1 + RA_RATE) ** Math.max(a - 55, 0);
+  // Self-drawn wealth pool (OA invested + OA floor + MA) projected to a payout age.
+  function poolAtAge(a: number, r: number) {
+    const t = Math.max(a - currentAge, 0);
+    const investible = member.balances.SA >= 40000 ? Math.max(member.balances.OA - 20000, 0) : 0;
+    const floor = member.balances.OA - investible;
+    return (
+      investible * (1 + r) ** t +
+      floor * (1 + OA_RATE) ** t +
+      member.balances.MA * (1 + RA_RATE) ** t
+    );
+  }
+
+  function optimize() {
+    const out: ScenarioRow[] = SCENARIOS.map(({ label, rate }) => {
+      let best = { total: -1, cpfLife: 0, selfDrawn: 0, wealth: 0, age: 65 };
+      for (let a = 65; a <= 70; a++) {
+        const cpfLife = monthlyFromRA(raAtAge(a), a, "Standard");
+        const pool = poolAtAge(a, rate);
+        const selfDrawn = pool / annuityPv(a, "Standard", OA_RATE);
+        const total = cpfLife + selfDrawn;
+        if (total > best.total) best = { total, cpfLife, selfDrawn, wealth: raAtAge(a) + pool, age: a };
+      }
+      return { label, rate, ...best };
+    });
+    setRows(out);
+    // wealth vs age (moderate 6%) from 55 → 90
+    const startAge = Math.max(currentAge, 55);
+    setChart(
+      Array.from({ length: 90 - startAge + 1 }, (_, i) => startAge + i).map((age) => ({
+        age, wealth: Math.round(raAtAge(age) + poolAtAge(age, 0.06)),
+      })),
+    );
+  }
+
+  const best = rows ? rows.reduce((m, r) => (r.total > m.total ? r : m), rows[0]) : null;
+
+  return (
+    <section className={`${cardClass} mb-4`} aria-label="Optimizer">
+      <h2 className="flex items-center gap-2 text-base font-semibold">
+        <RocketIcon className="h-6 w-6" /> Optimizer — your highest retirement income
+      </h2>
+      <p className="mt-1 text-sm text-[var(--color-muted)]">
+        Combines every lever — OA→SA transfers, top RA to ERS at 55, CPFIS-OA investing, and deferring
+        CPF LIFE — to find the most total monthly income and the largest total wealth, and at what age.
+      </p>
+
+      <button onClick={optimize} className={`${btnClass} mt-4`}>Optimize</button>
+
+      {rows && best && (
+        <div role="status" aria-live="polite" className="mt-4 space-y-4">
+          <div className="rounded-xl bg-[var(--color-primary)]/10 px-4 py-3 text-sm">
+            <span className="font-semibold">Best case ({best.label}, {best.rate * 100}%/yr):</span>{" "}
+            up to <span className="font-semibold tabular-nums">{sgdCompact(best.wealth)}</span> total wealth and{" "}
+            <span className="font-semibold tabular-nums">{sgd(best.total)}/mth</span> income, starting CPF LIFE at age{" "}
+            <span className="font-semibold">{best.age}</span>.
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] text-left text-xs text-[var(--color-muted)]">
+                  <th className="pb-2 font-medium">Scenario</th>
+                  <th className="pb-2 text-right font-medium">Max total wealth</th>
+                  <th className="pb-2 text-right font-medium">CPF LIFE /mth</th>
+                  <th className="pb-2 text-right font-medium">Self-drawn /mth</th>
+                  <th className="pb-2 text-right font-medium">Total /mth</th>
+                  <th className="pb-2 text-right font-medium">Start age</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.label} className={`border-b border-[var(--color-border)] last:border-0 ${r.label === "Moderate" ? "bg-[var(--color-surface-raised)]" : ""}`}>
+                    <td className="py-2 font-medium">{r.label} <span className="text-xs text-[var(--color-muted)]">({r.rate * 100}%)</span></td>
+                    <td className="py-2 text-right tabular-nums">{sgdCompact(r.wealth)}</td>
+                    <td className="py-2 text-right tabular-nums">{sgd(r.cpfLife)}</td>
+                    <td className="py-2 text-right tabular-nums">{sgd(r.selfDrawn)}</td>
+                    <td className="py-2 text-right font-semibold tabular-nums text-[var(--color-primary)]">{sgd(r.total)}</td>
+                    <td className="py-2 text-right tabular-nums">{r.age}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Recommended actions */}
+          <div className="rounded-xl bg-[var(--color-surface-raised)] p-4">
+            <h3 className="text-sm font-semibold">Recommended actions</h3>
+            <ul className="mt-2 space-y-1 text-sm text-[var(--color-muted)]">
+              <li>• Transfer OA→SA and use RSTU cash top-ups to reach the FRS, then the ERS, by age 55.</li>
+              <li>• At 55, top the RA up to the ERS — the CPF LIFE base, compounding at 4% with no cap.</li>
+              <li>• Invest OA above $20k via CPFIS (keep $20k OA / $40k SA, MA untouched; stocks ≤35%, gold ≤10%).</li>
+              <li>• Defer CPF LIFE to age <span className="font-semibold text-[var(--color-primary)]">{best.age}</span> for the highest permanent payout (+7%/yr, up to +35%).</li>
+            </ul>
+          </div>
+
+          {chart && (
+            <div role="img" aria-label="Total wealth from age 55 to 90 (moderate 6% scenario)" className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chart} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                  <YAxis tickFormatter={(v: number) => (v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${(v / 1000).toFixed(0)}k`)} tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={52} />
+                  <Tooltip formatter={(v) => [sgd(typeof v === "number" ? v : null), "Total wealth"]} labelFormatter={(a) => `Age ${a}`} contentStyle={tooltipStyle} />
+                  <Legend formatter={() => "Total wealth (RA + OA/MA, 6% scenario)"} wrapperStyle={{ fontSize: "12px" }} />
+                  <ReferenceLine x={best.age} stroke="var(--chart-4)" strokeDasharray="4 2" label={{ value: `payout ${best.age}`, fontSize: 10, fill: "var(--color-muted)" }} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="wealth" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-[var(--color-muted)]">
+        CPF LIFE pays only from the RA (capped at ERS + interest) — the &quot;self-drawn&quot; column is
+        you drawing down OA/MA/CPFIS wealth to age 90, not a CPF LIFE payout. Investment returns aren&apos;t
+        guaranteed; assumes the ERS is reached by 55.
       </p>
     </section>
   );
