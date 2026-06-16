@@ -10,6 +10,7 @@ import { MedisaveAdequacy } from "@/components/medisave-adequacy";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
 import { sgd } from "@/lib/format";
+import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // MA earns the 4% floor rate.
 const MA_RATE = 0.04;
@@ -114,9 +115,12 @@ export default function MedisavePage({
 
   // KPI values for selected year
   const maBalance = yr?.closing.MA ?? 0;
+  const maOpening = yr?.opening?.MA ?? 0;
   const bhsThisYear = ms?.bhs ?? 0;
   const neededToBhs = Math.max(bhsThisYear - maBalance, 0);
   const maInterest = yr?.interest_by_account?.MA ?? 0;
+  const maExtra = yr ? extraInterestByAccount(yr.closing, age).MA : 0;
+  const combined = yr ? yr.closing.OA + yr.closing.SA + yr.closing.MA + yr.closing.RA : 0;
 
   // Overflow values for selected year
   const overflow = yr?.overflow_out;
@@ -198,37 +202,48 @@ export default function MedisavePage({
         <YearScrubber ages={ages} value={age} onChange={setAge} />
       </div>
 
-      {/* 3. Per-year KPI row */}
+      {/* 3. Per-year KPI row — Current MA → interest → est. extra → end-of-year */}
       {yr && ms && (
         <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* MA balance */}
           <div className={cardClass}>
-            <p className={labelClass}>MA balance</p>
-            <p className={kpiClass}>{sgd(maBalance)}</p>
+            <p className={labelClass}>Current MA</p>
+            <p className={kpiClass}>{sgd(maOpening)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">start of year</p>
           </div>
+          <div className={cardClass}>
+            <p className={labelClass}>MA interest earned</p>
+            <p className={kpiClass}>{sgd(maInterest)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">this year (base 4% + extra)</p>
+          </div>
+          <div className={cardClass}>
+            <p className={labelClass}>Est. extra interest</p>
+            <p className={kpiClass}>{sgd(maExtra)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              {age >= 55 ? "+2%/+1% on first $60k band" : "+1% on first $60k band"}
+            </p>
+          </div>
+          <div className={cardClass}>
+            <p className={labelClass}>End of the year MA balance</p>
+            <p className={kpiClass}>{sgd(maBalance)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
+          </div>
+        </div>
+      )}
 
-          {/* BHS for the selected year */}
+      {/* 3a. BHS targets */}
+      {yr && ms && (
+        <div className="mb-4 grid gap-4 sm:grid-cols-2">
           <div className={cardClass}>
             <p className={labelClass}>BHS for Year {yr.year}</p>
             <p className={kpiClass}>{sgd(bhsThisYear)}</p>
           </div>
-
-          {/* Needed to hit BHS */}
           <div className={cardClass}>
             <p className={labelClass}>Needed to hit BHS</p>
             {neededToBhs === 0 ? (
-              <p className="mt-1 text-2xl font-bold text-[var(--color-primary)] tabular-nums">
-                BHS reached
-              </p>
+              <p className="mt-1 text-2xl font-bold text-[var(--color-primary)] tabular-nums">BHS reached</p>
             ) : (
               <p className={kpiClass}>{sgd(neededToBhs)}</p>
             )}
-          </div>
-
-          {/* MA interest earned */}
-          <div className={cardClass}>
-            <p className={labelClass}>MA interest earned</p>
-            <p className={kpiClass}>{sgd(maInterest)}</p>
           </div>
         </div>
       )}
@@ -259,6 +274,13 @@ export default function MedisavePage({
           wage capped at the Ordinary Wage ceiling ({sgd(owCeiling)}/mth). MA inflow stops once the
           BHS is reached and overflows out.
         </p>
+      </div>
+
+      {/* 3c. Combined CPF balance */}
+      <div className={`${cardClass} mb-4`}>
+        <p className={labelClass}>Combined CPF balance</p>
+        <p className={kpiClass}>{sgd(combined)}</p>
+        <p className="mt-1 text-xs text-[var(--color-muted)]">OA + SA + MA + RA (age {age})</p>
       </div>
 
       {/* 4. MA overflow card */}

@@ -16,6 +16,13 @@ import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
 import { sgd } from "@/lib/format";
+import { extraInterestByAccount } from "@/lib/extra-interest";
+
+// retirement-account opening balance for a year (RA post-55, else SA).
+function retBalOpening(yr: YearRow): number {
+  const ra = yr.opening?.RA ?? 0;
+  return ra > 0 ? ra : yr.opening?.SA ?? 0;
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +49,7 @@ export default function SaPage({
   const [ers, setErs] = useState<number>(0);   // base (today's) ERS
   const [sumRate, setSumRate] = useState<number>(0.035);
   const [baseYear, setBaseYear] = useState<number>(new Date().getFullYear());
+  const [owCeiling, setOwCeiling] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
 
   // Scrubber
@@ -71,6 +79,7 @@ export default function SaPage({
         const growth = (policy.assumptions as { growth?: { sum_rate?: number } } | undefined)?.growth;
         setSumRate(Number(growth?.sum_rate ?? 0.035));
         setBaseYear(Number(policy.effective_year) || new Date().getFullYear());
+        setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
         if (simRun.result.years.length > 0) {
           setAge(simRun.result.years[0].age);
           setTopupAge(simRun.result.years[0].age);
@@ -113,7 +122,16 @@ export default function SaPage({
     base * Math.pow(1 + sumRate, Math.max(year - baseYear, 0));
 
   const curRetBal = yr ? retBal(yr) : 0;
+  const openRetBal = yr ? retBalOpening(yr) : 0;
   const curRetInt = yr ? retInt(yr) : 0;
+  // Est. extra interest on the retirement account (SA pre-55, RA post-55).
+  const extra = yr ? extraInterestByAccount(yr.closing, age) : { OA: 0, SA: 0, MA: 0, RA: 0 };
+  const saExtra = extra.SA + extra.RA;
+  // SA/RA contribution from wage this year (engine figure).
+  const saAnnualIn = (yr?.contribution_by_account?.SA ?? 0) + (yr?.contribution_by_account?.RA ?? 0);
+  const saMonthlyIn = saAnnualIn / 12;
+  const cappedWage = Math.min(member.monthly_gross_wage, owCeiling > 0 ? owCeiling : member.monthly_gross_wage);
+  const combined = yr ? yr.closing.OA + yr.closing.SA + yr.closing.MA + yr.closing.RA : 0;
   const selYear = yr?.year ?? baseYear;
   const frsTarget = proj(frs, selYear);
   const ersTarget = proj(ers, selYear);
@@ -188,66 +206,103 @@ export default function SaPage({
         <YearScrubber ages={ages} value={age} onChange={setAge} />
       </div>
 
-      {/* 3. KPI grid */}
+      {/* 3. KPI grid — Current SA → interest → est. extra → end-of-year */}
       {yr && (
         <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* SA / retirement balance */}
           <div className={cardClass}>
-            <p className={labelClass}>SA / retirement balance</p>
-            <p className={kpiClass}>{sgd(curRetBal)}</p>
+            <p className={labelClass}>Current SA</p>
+            <p className={kpiClass}>{sgd(openRetBal)}</p>
             <p className="mt-1 text-xs text-[var(--color-muted)]">
-              {yr.closing.RA > 0 ? "RA (post-55)" : "SA (pre-55)"}
+              start of year · {yr.closing.RA > 0 ? "RA (post-55)" : "SA (pre-55)"}
             </p>
           </div>
+          <div className={cardClass}>
+            <p className={labelClass}>SA interest earned</p>
+            <p className={kpiClass}>{sgd(curRetInt)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">this year (base 4% + extra)</p>
+          </div>
+          <div className={cardClass}>
+            <p className={labelClass}>Est. extra interest</p>
+            <p className={kpiClass}>{sgd(saExtra)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              {age >= 55 ? "+2%/+1% on first $60k band" : "+1% on first $60k band"}
+            </p>
+          </div>
+          <div className={cardClass}>
+            <p className={labelClass}>End of the year SA balance</p>
+            <p className={kpiClass}>{sgd(curRetBal)}</p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
+          </div>
+        </div>
+      )}
 
-          {/* FRS target — projected to the selected year */}
+      {/* 3a. Retirement-sum targets */}
+      {yr && (
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className={cardClass}>
             <p className={labelClass}>FRS target for Year {selYear}</p>
             <p className={kpiClass}>{sgd(frsTarget)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">
-              Full Retirement Sum (today {sgd(frs)})
-            </p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">Full Retirement Sum (today {sgd(frs)})</p>
           </div>
-
-          {/* ERS target — projected to the selected year */}
           <div className={cardClass}>
             <p className={labelClass}>ERS target for Year {selYear}</p>
             <p className={kpiClass}>{sgd(ersTarget)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">
-              Enhanced Retirement Sum (today {sgd(ers)})
-            </p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">Enhanced Retirement Sum (today {sgd(ers)})</p>
           </div>
-
-          {/* SA/RA interest earned */}
-          <div className={cardClass}>
-            <p className={labelClass}>SA / RA interest earned</p>
-            <p className={kpiClass}>{sgd(curRetInt)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">this year</p>
-          </div>
-
-          {/* Needed to hit FRS */}
           <div className={cardClass}>
             <p className={labelClass}>Needed to hit FRS</p>
             {neededFrs === 0 ? (
-              <p className="mt-1 text-2xl font-bold text-[var(--color-primary)] tabular-nums">
-                FRS reached
-              </p>
+              <p className="mt-1 text-2xl font-bold text-[var(--color-primary)] tabular-nums">FRS reached</p>
             ) : (
               <p className={kpiClass}>{sgd(neededFrs)}</p>
             )}
           </div>
-
-          {/* Needed to hit ERS */}
           <div className={cardClass}>
             <p className={labelClass}>Needed to hit ERS</p>
             {neededErs === 0 ? (
-              <p className="mt-1 text-2xl font-bold text-[var(--color-primary)] tabular-nums">
-                ERS reached
-              </p>
+              <p className="mt-1 text-2xl font-bold text-[var(--color-primary)] tabular-nums">ERS reached</p>
             ) : (
               <p className={kpiClass}>{sgd(neededErs)}</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 3b. SA contribution from wage */}
+      {yr && (
+        <div className={`${cardClass} mb-4`}>
+          <h3 className={`${labelClass} mb-3`}>SA contribution from salary (age {age})</h3>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Gross wage / mth</p>
+              <p className="mt-0.5 font-semibold tabular-nums">{sgd(member.monthly_gross_wage)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">CPF-able wage / mth</p>
+              <p className="mt-0.5 font-semibold tabular-nums">{sgd(cappedWage)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Into SA/RA / mth</p>
+              <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(saMonthlyIn)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Into SA/RA / yr</p>
+              <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(saAnnualIn)}</p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-[var(--color-muted)]">
+            Employee + employer contribution flowing to the SA (or RA from 55) this year, on wage
+            capped at the Ordinary Wage ceiling ({sgd(owCeiling)}/mth).
+          </p>
+        </div>
+      )}
+
+      {/* 3c. Combined CPF balance */}
+      {yr && (
+        <div className={`${cardClass} mb-4`}>
+          <p className={labelClass}>Combined CPF balance</p>
+          <p className={kpiClass}>{sgd(combined)}</p>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">OA + SA + MA + RA (age {age})</p>
         </div>
       )}
 
