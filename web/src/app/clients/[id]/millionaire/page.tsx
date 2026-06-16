@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useMemo, useState } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ReferenceLine,
+  LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
 import { simulate, simulateWhatIf, getMember, getActivePolicy } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
@@ -36,6 +36,14 @@ function monthlyFromRA(ra: number, payoutAge: number, plan: Plan): number {
 // RA needed at payout to produce a target first-month payout.
 function raForMonthly(target: number, payoutAge: number, plan: Plan): number {
   return (target * annuityPv(payoutAge, plan)) / (1 + deferralBonus(payoutAge));
+}
+// Level-annuity PV factor from one age to another (used for self-drawdown to 100).
+function levelAnnuityPv(fromAge: number, toAge: number, rate: number): number {
+  const r = rate / 12;
+  const n = Math.max(toAge - fromAge, 0) * 12;
+  let pv = 0;
+  for (let k = 1; k <= n; k++) pv += 1 / (1 + r) ** k;
+  return pv;
 }
 
 // ── shared styles ─────────────────────────────────────────────────────────────
@@ -137,6 +145,7 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
       <CpfisCard member={member} />
       <WhatIfCard ers={ers} proj={proj} yearForAge={yearForAge} memberRa={member.balances.RA} currentAge={currentAge} />
       <OptimizerSection member={member} ers={ers} bhs={bhs} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
+      <WithdrawalTimeline member={member} ers={ers} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
 
       <p className="mt-2 text-xs text-[var(--color-muted)]">
         Figures are a transparent annuity estimate, not CPF Board&apos;s pooled actuarial payout.
@@ -609,6 +618,10 @@ function OptimizerSection({
   const [rows, setRows] = useState<ScenarioRow[] | null>(null);
   const [chart, setChart] = useState<{ age: number; wealth: number }[] | null>(null);
 
+  const maxInvestible = member.balances.OA > 20000 && member.balances.SA >= 40000
+    ? Math.max(member.balances.OA - 20000, 0) : 0;
+  const [investAmt, setInvestAmt] = useState(Math.round(maxInvestible));
+
   const SCENARIOS = [
     { label: "Conservative", rate: 0.04 },
     { label: "Moderate", rate: 0.06 },
@@ -618,24 +631,25 @@ function OptimizerSection({
   // RA at a given payout age on the ERS-by-55 path (top-up to ERS, then 4%).
   const ersAt55 = proj(ers, yearForAge(55));
   const raAtAge = (a: number) => ersAt55 * (1 + RA_RATE) ** Math.max(a - 55, 0);
-  // Self-drawn wealth pool (OA invested + OA floor + MA) projected to a payout age.
-  function poolAtAge(a: number, r: number) {
+  // Self-drawn wealth pool: the invested slice grows at r, the rest of OA at 2.5%,
+  // MA at 4% — projected to a payout age.
+  function poolAtAge(a: number, r: number, invest: number) {
     const t = Math.max(a - currentAge, 0);
-    const investible = member.balances.SA >= 40000 ? Math.max(member.balances.OA - 20000, 0) : 0;
-    const floor = member.balances.OA - investible;
+    const floor = Math.max(member.balances.OA - invest, 0);
     return (
-      investible * (1 + r) ** t +
+      invest * (1 + r) ** t +
       floor * (1 + OA_RATE) ** t +
       member.balances.MA * (1 + RA_RATE) ** t
     );
   }
 
   function optimize() {
+    const invest = Math.min(investAmt, member.balances.OA);
     const out: ScenarioRow[] = SCENARIOS.map(({ label, rate }) => {
       let best = { total: -1, cpfLife: 0, selfDrawn: 0, wealth: 0, age: 65 };
       for (let a = 65; a <= 70; a++) {
         const cpfLife = monthlyFromRA(raAtAge(a), a, "Standard");
-        const pool = poolAtAge(a, rate);
+        const pool = poolAtAge(a, rate, invest);
         const selfDrawn = pool / annuityPv(a, "Standard", OA_RATE);
         const total = cpfLife + selfDrawn;
         if (total > best.total) best = { total, cpfLife, selfDrawn, wealth: raAtAge(a) + pool, age: a };
@@ -647,7 +661,7 @@ function OptimizerSection({
     const startAge = Math.max(currentAge, 55);
     setChart(
       Array.from({ length: 90 - startAge + 1 }, (_, i) => startAge + i).map((age) => ({
-        age, wealth: Math.round(raAtAge(age) + poolAtAge(age, 0.06)),
+        age, wealth: Math.round(raAtAge(age) + poolAtAge(age, 0.06, invest)),
       })),
     );
   }
@@ -664,7 +678,26 @@ function OptimizerSection({
         CPF LIFE — to find the most total monthly income and the largest total wealth, and at what age.
       </p>
 
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="opt-invest" className="mb-1 block text-xs font-medium">Amount to invest via CPFIS (S$)</label>
+          <input id="opt-invest" type="number" min={0} step={5000} value={investAmt}
+            onChange={(e) => setInvestAmt(Math.max(0, Number(e.target.value)))} className={inputClass}
+            aria-label="Amount to invest via CPFIS" />
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            Max investible (OA above $20k, SA ≥ $40k): {sgd(maxInvestible)} · stocks ≤35% / gold ≤10%.
+          </p>
+        </div>
+      </div>
+
       <button onClick={optimize} className={`${btnClass} mt-4`}>Optimize</button>
+
+      {rows && investAmt <= 0 && (
+        <p className="mt-3 text-sm text-[var(--color-muted)]">
+          With $0 invested, every return scenario gives the same result — enter an amount above to
+          compare 4% / 6% / 8%.
+        </p>
+      )}
 
       {rows && best && (
         <div role="status" aria-live="polite" className="mt-4 space-y-4">
@@ -735,6 +768,184 @@ function OptimizerSection({
         CPF LIFE pays only from the RA (capped at ERS + interest) — the &quot;self-drawn&quot; column is
         you drawing down OA/MA/CPFIS wealth to age 90, not a CPF LIFE payout. Investment returns aren&apos;t
         guaranteed; assumes the ERS is reached by 55.
+      </p>
+    </section>
+  );
+}
+
+// ── 7. Withdrawal timeline to age 100 (two separate streams) ────────────────────
+function WithdrawalTimeline({
+  member, ers, proj, yearForAge, currentAge,
+}: {
+  member: Member; ers: number;
+  proj: (b: number, y: number) => number; yearForAge: (a: number) => number; currentAge: number;
+}) {
+  const oa = member.balances.OA;
+  const ma = member.balances.MA;
+  const maxInvestible = oa > 20000 && member.balances.SA >= 40000 ? oa - 20000 : 0;
+
+  const [startAge, setStartAge] = useState(65);
+  const [rate, setRate] = useState(6);
+  const [investAmt, setInvestAmt] = useState(Math.round(maxInvestible));
+  const [customMonthly, setCustomMonthly] = useState("");
+  const [result, setResult] = useState<{
+    cpfLife: number; self: number; spread: number; isCustom: boolean; pot0: number;
+    runOut: number | null;
+    rows: { age: number; cpfLife: number; self: number; total: number; pot: number }[];
+  } | null>(null);
+
+  const ersAt55 = proj(ers, yearForAge(55));
+  const raAtAge = (a: number) => ersAt55 * (1 + RA_RATE) ** Math.max(a - 55, 0);
+
+  function compute() {
+    const invest = Math.min(investAmt, oa);
+    const r = rate / 100;
+    const t0 = Math.max(startAge - currentAge, 0);
+    const pot0 =
+      invest * (1 + r) ** t0 +
+      Math.max(oa - invest, 0) * (1 + OA_RATE) ** t0 +
+      ma * (1 + RA_RATE) ** t0;
+    const cpfLife = monthlyFromRA(raAtAge(startAge), startAge, "Standard");
+    const spread = pot0 / levelAnnuityPv(startAge, 100, OA_RATE);
+    const custom = Number(customMonthly) > 0 ? Number(customMonthly) : 0;
+    const self = custom > 0 ? custom : spread;
+
+    const dr = OA_RATE / 12;
+    let bal = pot0;
+    let runOut: number | null = null;
+    const rows: { age: number; cpfLife: number; self: number; total: number; pot: number }[] = [];
+    for (let age = startAge; age <= 100; age++) {
+      const drawing = bal > 0.5;
+      rows.push({
+        age,
+        cpfLife: Math.round(cpfLife),
+        self: drawing ? Math.round(self) : 0,
+        total: Math.round(cpfLife + (drawing ? self : 0)),
+        pot: Math.max(Math.round(bal), 0),
+      });
+      for (let m = 0; m < 12; m++) {
+        bal = bal * (1 + dr) - self;
+        if (bal <= 0 && runOut === null) { runOut = age + (m + 1) / 12; bal = 0; }
+      }
+    }
+    setResult({ cpfLife, self, spread, isCustom: custom > 0, pot0, runOut, rows });
+  }
+
+  const bands = result ? result.rows.filter((d) => d.age === startAge || d.age % 5 === 0 || d.age === 100) : [];
+
+  return (
+    <section className={`${cardClass} mb-4`} aria-label="Withdrawal timeline to age 100">
+      <h2 className="flex items-center gap-2 text-base font-semibold">
+        <MillionaireIcon className="h-6 w-6" /> Withdrawal timeline to age 100
+      </h2>
+      <p className="mt-1 text-sm text-[var(--color-muted)]">
+        Two separate streams: <span className="font-semibold">CPF LIFE</span> (from the RA, paid for
+        life) and a <span className="font-semibold">self-drawn</span> pot (OA + MA + CPFIS) you spend
+        down. See your combined income each year and when the pot runs out.
+      </p>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label htmlFor="wt-age" className="mb-1 block text-xs font-medium">Start age (65–70)</label>
+          <input id="wt-age" type="number" min={65} max={70} step={1} value={startAge}
+            onChange={(e) => setStartAge(Math.max(65, Math.min(70, Number(e.target.value))))}
+            className={inputClass} aria-label="Withdrawal start age" />
+        </div>
+        <div>
+          <label htmlFor="wt-rate" className="mb-1 block text-xs font-medium">CPFIS return (%/yr)</label>
+          <input id="wt-rate" type="number" min={0} max={30} step={0.5} value={rate}
+            onChange={(e) => setRate(Math.max(0, Math.min(30, Number(e.target.value))))}
+            className={inputClass} aria-label="CPFIS return rate" />
+        </div>
+        <div>
+          <label htmlFor="wt-invest" className="mb-1 block text-xs font-medium">Invest via CPFIS (S$)</label>
+          <input id="wt-invest" type="number" min={0} step={5000} value={investAmt}
+            onChange={(e) => setInvestAmt(Math.max(0, Number(e.target.value)))}
+            className={inputClass} aria-label="Amount to invest via CPFIS" />
+        </div>
+        <div>
+          <label htmlFor="wt-custom" className="mb-1 block text-xs font-medium">Self-draw /mth (blank = to 100)</label>
+          <input id="wt-custom" type="number" min={0} step={500} value={customMonthly}
+            onChange={(e) => setCustomMonthly(e.target.value)} placeholder="auto"
+            className={inputClass} aria-label="Custom monthly self-draw (blank to spread to 100)" />
+        </div>
+      </div>
+
+      <button onClick={compute} className={`${btnClass} mt-4`}>Build timeline</button>
+
+      {result && (
+        <div role="status" aria-live="polite" className="mt-4 space-y-4">
+          <div className="grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">CPF LIFE /mth (for life)</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">{sgd(result.cpfLife)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Self-drawn /mth {result.isCustom ? "(your figure)" : "(spread to 100)"}</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.self)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Combined /mth (while pot lasts)</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.cpfLife + result.self)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Pot runs out at</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">
+                {result.runOut === null ? "beyond 100" : `Age ${Math.floor(result.runOut)}`}
+              </p>
+            </div>
+          </div>
+
+          {/* Stacked income to 100 */}
+          <div role="img" aria-label="Monthly income from CPF LIFE and self-drawn pot to age 100" className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={result.rows} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                <YAxis tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={48} />
+                <Tooltip formatter={(v, n) => [sgd(typeof v === "number" ? v : null), n === "cpfLife" ? "CPF LIFE" : "Self-drawn"]} labelFormatter={(a) => `Age ${a}`} contentStyle={tooltipStyle} />
+                <Legend formatter={(v) => (v === "cpfLife" ? "CPF LIFE (for life)" : "Self-drawn (OA/MA/CPFIS)")} wrapperStyle={{ fontSize: "12px" }} />
+                <Area isAnimationActive={false} type="monotone" dataKey="cpfLife" stackId="1" stroke="var(--chart-1)" fill="var(--chart-1)" />
+                <Area isAnimationActive={false} type="monotone" dataKey="self" stackId="1" stroke="var(--chart-2)" fill="var(--chart-2)" />
+                {result.runOut !== null && (
+                  <ReferenceLine x={Math.floor(result.runOut)} stroke="var(--chart-4)" strokeDasharray="4 2" label={{ value: "pot empty", fontSize: 10, fill: "var(--color-muted)" }} />
+                )}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Table by 5-year bands */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] text-left text-xs text-[var(--color-muted)]">
+                  <th className="pb-2 font-medium">Age</th>
+                  <th className="pb-2 text-right font-medium">CPF LIFE</th>
+                  <th className="pb-2 text-right font-medium">Self-drawn</th>
+                  <th className="pb-2 text-right font-medium">Total /mth</th>
+                  <th className="pb-2 text-right font-medium">Pot remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bands.map((d) => (
+                  <tr key={d.age} className="border-b border-[var(--color-border)] last:border-0">
+                    <td className="py-2 font-medium">{d.age}</td>
+                    <td className="py-2 text-right tabular-nums">{sgd(d.cpfLife)}</td>
+                    <td className="py-2 text-right tabular-nums">{d.self > 0 ? sgd(d.self) : "—"}</td>
+                    <td className="py-2 text-right font-semibold tabular-nums text-[var(--color-primary)]">{sgd(d.total)}</td>
+                    <td className="py-2 text-right tabular-nums">{sgdCompact(d.pot)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-[var(--color-muted)]">
+        CPF LIFE is a lifelong annuity — it never runs out (shown flat to 100, and it continues
+        beyond). Only the self-drawn pot (OA + MA + CPFIS, drawn at ~2.5%) depletes. Returns are
+        assumptions, not guaranteed.
       </p>
     </section>
   );
