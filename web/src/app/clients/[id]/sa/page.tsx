@@ -325,7 +325,8 @@ export default function SaPage({
         )}
         <p className="mt-3 text-xs text-[var(--color-muted)]">
           At 55, amounts above your retirement sum move from SA to OA. SA
-          contributions also overflow to OA once FRS is reached.
+          contributions also overflow to OA once FRS is reached. If your SA + OA
+          can&apos;t meet the FRS at 55, up to $5,000 stays withdrawable in your OA.
         </p>
       </div>
 

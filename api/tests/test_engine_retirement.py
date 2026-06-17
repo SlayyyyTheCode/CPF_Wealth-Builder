@@ -29,12 +29,25 @@ def test_form_ra_needs_sa_and_oa():
     assert detail["from_oa"] == Decimal("70400")
 
 
-def test_form_ra_shortfall_allowed():
+def test_form_ra_shortfall_keeps_5k_in_oa():
+    # SA+OA < FRS → keep up to $5,000 withdrawable in OA, rest to RA.
     s = AccountState(OA=Decimal("20000"), SA=Decimal("50000"), MA=Decimal("60000"))
     new, detail = form_ra(s, FRS)
-    assert new.RA == Decimal("70000")    # 50000 + 20000, below FRS
-    assert new.OA == Decimal("0")
+    assert new.RA == Decimal("65000")    # 50000 + (20000 - 5000)
+    assert new.OA == Decimal("5000")
     assert new.SA == Decimal("0")
+    assert detail["from_oa"] == Decimal("15000")
+    assert detail["oa_retained"] == Decimal("5000")
+
+
+def test_form_ra_shortfall_small_oa_kept_whole():
+    # OA below the $5k cap stays entirely in OA.
+    s = AccountState(OA=Decimal("3000"), SA=Decimal("50000"), MA=Decimal("60000"))
+    new, detail = form_ra(s, FRS)
+    assert new.RA == Decimal("50000")
+    assert new.OA == Decimal("3000")
+    assert detail["from_oa"] == Decimal("0")
+    assert detail["oa_retained"] == Decimal("3000")
 
 
 def test_form_ra_brs_target_leaves_sa_remainder_to_oa():
