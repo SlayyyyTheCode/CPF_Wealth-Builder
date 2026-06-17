@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createMember } from "@/lib/api";
 import type { NewMember } from "@/lib/types";
+import { useToast } from "./toast";
 
 type FormState = {
   name: string; dob: string; wage: string; emp: string;
@@ -26,6 +27,7 @@ export function MemberFormDialog({
   const [f, setF] = useState<FormState>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -56,8 +58,8 @@ export function MemberFormDialog({
       housing_data: { monthly_mortgage: num(f.mortgage) },
       ...(f.password ? { password: f.password } : {}),
     };
-    try { await createMember(payload); setF(EMPTY); onCreated(); }
-    catch (e2) { setErr((e2 as Error).message); }
+    try { await createMember(payload); toast.success(`Client "${payload.name}" created`); setF(EMPTY); onCreated(); }
+    catch (e2) { const msg = (e2 as Error).message; setErr(msg); toast.error(`Could not create client: ${msg}`); }
     finally { setBusy(false); }
   }
 

@@ -15,6 +15,7 @@ import { simulate, getMember, getActivePolicy } from "@/lib/api";
 import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
+import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
@@ -93,12 +94,7 @@ export default function SaPage({
 
   // ── loading / error ────────────────────────────────────────────────────────
 
-  if (err)
-    return (
-      <p role="alert" className="text-[var(--color-error)]">
-        Could not load: {err}
-      </p>
-    );
+  if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!res || !member || age === null)
     return (

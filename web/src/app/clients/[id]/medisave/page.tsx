@@ -9,6 +9,7 @@ import { MaBhsChart } from "@/components/ma-bhs-chart";
 import { MedisaveAdequacy } from "@/components/medisave-adequacy";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
+import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
@@ -75,12 +76,7 @@ export default function MedisavePage({
     };
   }, [id]);
 
-  if (err)
-    return (
-      <p role="alert" className="text-[var(--color-error)]">
-        Could not load: {err}
-      </p>
-    );
+  if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!res || !member || age === null)
     return (

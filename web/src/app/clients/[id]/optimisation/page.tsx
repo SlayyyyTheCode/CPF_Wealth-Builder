@@ -6,6 +6,7 @@ import { ScenarioCards } from "@/components/scenario-cards";
 import { StrategyList } from "@/components/strategy-list";
 import { TaxMethods } from "@/components/tax-methods";
 import { PageHeading, OptimiseIcon } from "@/components/icons";
+import { ErrorState } from "@/components/error-state";
 
 export default function OptimisationPage({
   params,
@@ -30,12 +31,7 @@ export default function OptimisationPage({
     };
   }, [id]);
 
-  if (err)
-    return (
-      <p role="alert" className="text-[var(--color-error)]">
-        Could not load: {err}
-      </p>
-    );
+  if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!analysis)
     return (

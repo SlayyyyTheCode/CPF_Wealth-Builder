@@ -6,6 +6,7 @@ import {
 import { simulate, simulateWhatIf, getMember, getActivePolicy } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
 import { PageHeading, MillionaireIcon, RocketIcon } from "@/components/icons";
+import { ErrorState } from "@/components/error-state";
 import { useAdmin } from "@/lib/admin";
 import { sgd, sgdCompact } from "@/lib/format";
 
@@ -85,7 +86,7 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
   }, [id]);
 
   if (err)
-    return <p role="alert" className="text-[var(--color-error)]">Could not load: {err}</p>;
+    return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!res || !member || !policy)
     return (

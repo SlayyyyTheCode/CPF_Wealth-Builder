@@ -4,6 +4,7 @@ import { listMembers } from "@/lib/api";
 import type { MemberSummary } from "@/lib/types";
 import { ClientCard } from "./client-card";
 import { AdminBar } from "./admin-bar";
+import { ErrorState } from "./error-state";
 import { RocketIcon } from "./icons";
 import { useAdmin } from "@/lib/admin";
 
@@ -18,7 +19,7 @@ export function ClientGrid({ onNew }: { onNew: () => void }) {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  if (err) return <p role="alert" className="text-[var(--color-error)]">Couldn&apos;t load clients: {err}</p>;
+  if (err) return <ErrorState message={err} onRetry={() => { setErr(null); load(); }} />;
   if (rows === null)
     return <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[0,1,2].map(i =>
       <div key={i} className="h-32 animate-pulse rounded-2xl bg-[var(--color-surface-raised)]" />)}</div>;

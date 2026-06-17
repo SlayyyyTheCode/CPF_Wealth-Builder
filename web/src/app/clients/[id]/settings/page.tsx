@@ -1,11 +1,13 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import { getMember, updateMember } from "@/lib/api";
 import type { Member, MemberUpdate } from "@/lib/types";
 import { dobMMYYYY, ageFromDob } from "@/lib/format";
 import { PageHeading, SettingsIcon } from "@/components/icons";
 import { AdminBar } from "@/components/admin-bar";
 import { useAdmin } from "@/lib/admin";
+import { useToast } from "@/components/toast";
+import { ErrorState } from "@/components/error-state";
 
 export default function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -29,12 +31,12 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const [saved, setSaved] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const { isAdmin, login, logout } = useAdmin();
+  const toast = useToast();
 
-  useEffect(() => {
-    let ok = true;
+  const load = useCallback(() => {
+    setErr(null);
     getMember(Number(id))
       .then((m) => {
-        if (!ok) return;
         setMember(m);
         setName(m.name);
         setWage(String(m.monthly_gross_wage));
@@ -46,12 +48,13 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         setMortgage(String(m.housing_data?.monthly_mortgage ?? 0));
         setAccess(!!m.special_access);
       })
-      .catch((e) => ok && setErr((e as Error).message));
-    return () => { ok = false; };
+      .catch((e) => setErr((e as Error).message));
   }, [id]);
 
+  useEffect(() => { load(); }, [load]);
+
   if (err)
-    return <p role="alert" className="text-[var(--color-error)]">Couldn&apos;t load: {err}</p>;
+    return <ErrorState message={err} onRetry={load} />;
 
   if (!member)
     return (
@@ -88,9 +91,13 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
     try {
       const updated = await updateMember(Number(id), body);
       setMember(updated);
+      setPassword("");
       setSaved(true);
+      toast.success("Changes saved");
     } catch (e) {
-      setSaveErr((e as Error).message);
+      const msg = (e as Error).message;
+      setSaveErr(msg);
+      toast.error(`Save failed: ${msg}`);
     } finally {
       setBusy(false);
     }

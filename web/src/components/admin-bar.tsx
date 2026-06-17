@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ShieldCheckIcon } from "./icons";
+import { useToast } from "./toast";
 
 export function AdminBar({
   isAdmin,
@@ -17,6 +18,7 @@ export function AdminBar({
   const [showPw, setShowPw] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,8 +30,10 @@ export function AdminBar({
       setOpen(false);
       setId("");
       setPw("");
+      toast.success("Signed in as administrator");
     } else {
       setErr("Invalid ID or password.");
+      toast.error("Wrong ID or password");
     }
   }
 

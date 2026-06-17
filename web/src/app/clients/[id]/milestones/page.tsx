@@ -4,6 +4,7 @@ import { simulate, getMember, getActivePolicy } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
 import { TargetTimeline } from "@/components/target-timeline";
 import { PageHeading, MilestonesIcon } from "@/components/icons";
+import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
 
 interface PolicySnapshot {
@@ -112,12 +113,7 @@ export default function MilestonesPage({
     };
   }, [id]);
 
-  if (err)
-    return (
-      <p role="alert" className="text-[var(--color-error,#ef4444)]">
-        Could not load: {err}
-      </p>
-    );
+  if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!res || !member || !policy)
     return (

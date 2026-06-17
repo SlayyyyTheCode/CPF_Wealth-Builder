@@ -5,6 +5,8 @@ import type { MemberSummary } from "@/lib/types";
 import { sgd, ageFromDob } from "@/lib/format";
 import { ReadinessBadge } from "./readiness-badge";
 import { deleteMember } from "@/lib/api";
+import { useToast } from "./toast";
+import { useConfirm } from "./confirm-dialog";
 
 export function ClientCard({
   m,
@@ -17,18 +19,26 @@ export function ClientCard({
 }) {
   const r = m.latest_run?.readiness ?? null;
   const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   async function handleDelete(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!window.confirm(`Delete client "${m.name}"? This removes their profile and all simulations. Cannot be undone.`))
-      return;
+    const ok = await confirm({
+      title: `Delete ${m.name}?`,
+      message: "This removes their profile and all simulations. This cannot be undone.",
+      confirmText: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await deleteMember(m.id);
+      toast.success(`Deleted ${m.name}`);
       onDeleted?.();
     } catch (err) {
-      window.alert(`Delete failed: ${(err as Error).message}`);
+      toast.error(`Delete failed: ${(err as Error).message}`);
       setBusy(false);
     }
   }

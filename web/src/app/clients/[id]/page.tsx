@@ -7,6 +7,7 @@ import { NetWorthChart } from "@/components/net-worth-chart";
 import { AccountBreakdownChart } from "@/components/account-breakdown-chart";
 import { GrowthChart } from "@/components/growth-chart";
 import { PageHeading, OverviewIcon } from "@/components/icons";
+import { ErrorState } from "@/components/error-state";
 import { getMember, simulate } from "@/lib/api";
 import type { Member, SimResult, Balances } from "@/lib/types";
 import { sgd, sgdCompact } from "@/lib/format";
@@ -33,8 +34,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
     return () => { ok = false; };
   }, [id]);
 
-  if (err)
-    return <p role="alert" className="text-[var(--color-error)]">Couldn&apos;t load: {err}</p>;
+  if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!member || !res)
     return (
