@@ -11,7 +11,8 @@ from app.engines.contribution import monthly_contribution
 from app.engines.allocation import allocate
 from app.engines.overflow import apply_ma, apply_saorra, saorra_overflow
 from app.engines.interest import monthly_base, monthly_extra, apply_credit
-from app.engines.money import round_to_cent
+from app.engines.money import round_to_cent, round_to_dollar
+from app.policy.rates import band_for_age
 from app.engines.retirement import form_ra
 from app.engines.cpflife import project_cpf_life
 
@@ -48,6 +49,9 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
 
     while age_at(inp.dob, year, 1) < inp.end_age:
         policy = resolve_policy(year)
+        # Annual salary increment compounds from the second projection year on.
+        if year > inp.start_year and inp.salary_increment > ZERO:
+            wage = wage * (Decimal("1") + inp.salary_increment)
         year_open = state
         base_acc = _zero_acc()
         extra_acc = _zero_acc()
@@ -102,6 +106,31 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
                 events.append(Event("SA_OVERFLOW", year, month, {"to_oa": sa_oa}))
                 ovf_year["sa_to_oa"] += sa_oa
             state = apply_saorra(state, split["SAorRA"], age, policy)
+
+            # 3b. Annual bonus (paid in December) — CPF as Additional Wage,
+            # capped by the AW ceiling (aw_ceiling = 102k − the year's OW).
+            if month == 12 and inp.bonus_months > ZERO:
+                ow_subject = Decimal("12") * min(wage, policy["ow_ceiling"])
+                aw_room = max(policy["aw_ceiling"] - ow_subject, ZERO)
+                aw_base = min(inp.bonus_months * wage, aw_room)
+                if aw_base > ZERO:
+                    rate = Decimal(str(policy["contribution_rates"][band_for_age(age)]))
+                    total_b = round_to_dollar(aw_base * rate)
+                    total_contrib += total_b
+                    split_b = allocate(total_b, age, policy)
+                    contrib_acc["OA"] += split_b["OA"]
+                    contrib_acc["MA"] += split_b["MA"]
+                    contrib_acc["RA" if age >= 55 else "SA"] += split_b["SAorRA"]
+                    state = replace(state, OA=state.OA + split_b["OA"])
+                    state, ovfb = apply_ma(state, split_b["MA"], age, policy)
+                    if ovfb is not None:
+                        ovf_year["ma_to_sa"] += ovfb.get("to_SA", ZERO)
+                        ovf_year["ma_to_oa"] += ovfb.get("to_OA", ZERO)
+                        ovf_year["ma_to_ra"] += ovfb.get("to_RA", ZERO)
+                    sa_oa_b = saorra_overflow(state, split_b["SAorRA"], age, policy)
+                    if sa_oa_b > ZERO:
+                        ovf_year["sa_to_oa"] += sa_oa_b
+                    state = apply_saorra(state, split_b["SAorRA"], age, policy)
 
             months.append(MonthState(year, month, age, opening, state))
 

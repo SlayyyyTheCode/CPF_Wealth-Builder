@@ -23,6 +23,14 @@ class MemberProfile(Base):
     )
     # optional per-client password (bcrypt) — app-level gate to open the client
     password_hash: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # projection inputs: yearly salary increment (fraction, e.g. 0.03) and annual
+    # bonus expressed in months of salary.
+    salary_increment_pct: Mapped[float] = mapped_column(
+        Numeric(6, 4), nullable=False, default=0, server_default="0"
+    )
+    bonus_months: Mapped[float] = mapped_column(
+        Numeric(5, 2), nullable=False, default=0, server_default="0"
+    )
 
     @property
     def has_password(self) -> bool:

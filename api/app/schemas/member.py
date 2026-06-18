@@ -19,6 +19,8 @@ class MemberCreate(BaseModel):
     housing_data: dict | None = None
     voluntary_top_ups: list | None = None
     special_access: bool = False
+    salary_increment_pct: float = 0   # yearly raise as a fraction (0.03 = 3%)
+    bonus_months: float = 0           # annual bonus in months of salary
     password: str | None = None  # optional per-client password (input only)
 
 
@@ -33,6 +35,8 @@ class MemberOut(BaseModel):
     housing_data: dict | None = None
     voluntary_top_ups: list | None = None
     special_access: bool = False
+    salary_increment_pct: float = 0
+    bonus_months: float = 0
     has_password: bool = False  # never expose the hash
 
 
@@ -44,6 +48,8 @@ class MemberUpdate(BaseModel):
     balances: Balances | None = None
     housing_data: dict | None = None
     special_access: bool | None = None
+    salary_increment_pct: float | None = None
+    bonus_months: float | None = None
     password: str | None = None  # set/replace per-client password
 
 

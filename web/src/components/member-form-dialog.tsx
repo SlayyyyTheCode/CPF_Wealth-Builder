@@ -7,11 +7,11 @@ import { useToast } from "./toast";
 type FormState = {
   name: string; dob: string; wage: string; emp: string;
   oa: string; sa: string; ma: string; ra: string;
-  mortgage: string; password: string;
+  mortgage: string; increment: string; bonus: string; password: string;
 };
 const EMPTY: FormState = {
   name: "", dob: "", wage: "", emp: "employee",
-  oa: "", sa: "", ma: "", ra: "", mortgage: "", password: "",
+  oa: "", sa: "", ma: "", ra: "", mortgage: "", increment: "", bonus: "", password: "",
 };
 
 // Age this calendar year from a "MM/YYYY" birth month.
@@ -56,6 +56,8 @@ export function MemberFormDialog({
       employment_status: f.emp,
       balances: { OA: num(f.oa), SA: num(f.sa), MA: num(f.ma), RA: raLocked ? 0 : num(f.ra) },
       housing_data: { monthly_mortgage: num(f.mortgage) },
+      salary_increment_pct: num(f.increment) / 100,
+      bonus_months: num(f.bonus),
       ...(f.password ? { password: f.password } : {}),
     };
     try { await createMember(payload); toast.success(`Client "${payload.name}" created`); setF(EMPTY); onCreated(); }
@@ -107,6 +109,18 @@ export function MemberFormDialog({
             Monthly housing mortgage (S$)
             <input type="number" min={0} className={field} value={f.mortgage} placeholder="0"
               onChange={(e) => setF({ ...f, mortgage: e.target.value })} />
+          </label>
+
+          <label className="text-sm">
+            Salary increment (%/yr)
+            <input type="number" min={0} step={0.5} className={field} value={f.increment} placeholder="0"
+              onChange={(e) => setF({ ...f, increment: e.target.value })} />
+          </label>
+
+          <label className="text-sm">
+            Annual bonus (months)
+            <input type="number" min={0} step={0.5} className={field} value={f.bonus} placeholder="0"
+              onChange={(e) => setF({ ...f, bonus: e.target.value })} />
           </label>
 
           <label className="text-sm">

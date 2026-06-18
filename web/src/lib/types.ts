@@ -15,6 +15,7 @@ export interface Member {
   id: number; name: string; dob: string; monthly_gross_wage: number;
   employment_status: string; balances: Balances; special_access?: boolean;
   housing_data?: HousingData | null; has_password?: boolean;
+  salary_increment_pct?: number; bonus_months?: number;
 }
 export interface YearRow {
   year: number; age: number;
@@ -46,7 +47,7 @@ export interface SimRun { id: number; member_id: number; result: SimResult; }
 export interface NewMember {
   name: string; dob: string; monthly_gross_wage: number;
   employment_status: string; balances: Balances; housing_data?: HousingData | null;
-  password?: string;
+  password?: string; salary_increment_pct?: number; bonus_months?: number;
 }
 export interface Strategy {
   name: string; trigger_met: boolean;
@@ -63,7 +64,7 @@ export interface PolicyCore {
 export interface DiffRow { field: string; current: number | null; extracted: number | null; changed: boolean; }
 export interface IngestResult { extracted: PolicyCore; diff: DiffRow[]; carried_forward: Record<string, unknown>; }
 export interface SnapshotListItem { id: number; effective_year: number; status: string; created_at: string; approved_at: string | null; }
-export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?: number; employment_status?: string; balances?: Balances; special_access?: boolean; housing_data?: HousingData | null; password?: string; }
+export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?: number; employment_status?: string; balances?: Balances; special_access?: boolean; housing_data?: HousingData | null; password?: string; salary_increment_pct?: number; bonus_months?: number; }
 export interface TaxEstimate { estimated_tax_saved: number; marginal_rate: number; }
 export interface TaxRelief { relief_earned: number; remaining_cap: number; estimated_tax_saved: number; marginal_rate: number; }
 export interface Assumptions {

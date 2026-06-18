@@ -24,6 +24,8 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const [ma, setMa] = useState("");
   const [ra, setRa] = useState("");
   const [mortgage, setMortgage] = useState(""); // monthly housing mortgage → OA calc
+  const [increment, setIncrement] = useState(""); // salary increment %/yr
+  const [bonus, setBonus] = useState("");         // annual bonus in months
   const [password, setPassword] = useState(""); // set/replace per-client password
   const [access, setAccess] = useState(false); // CPF Millionaire + self-edit access
 
@@ -46,6 +48,8 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         setMa(String(m.balances.MA));
         setRa(String(m.balances.RA));
         setMortgage(String(m.housing_data?.monthly_mortgage ?? 0));
+        setIncrement(String((m.salary_increment_pct ?? 0) * 100));
+        setBonus(String(m.bonus_months ?? 0));
         setAccess(!!m.special_access);
       })
       .catch((e) => setErr((e as Error).message));
@@ -82,6 +86,8 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         RA: member && ageFromDob(member.dob) < 55 ? 0 : Number(ra),
       },
       housing_data: { monthly_mortgage: Number(mortgage) || 0 },
+      salary_increment_pct: (Number(increment) || 0) / 100,
+      bonus_months: Number(bonus) || 0,
       // Only set the password when the user typed a new one.
       ...(password ? { password } : {}),
       // Only the admin can grant/revoke access; the backend ignores it otherwise.
@@ -212,6 +218,27 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
               />
               <p className="mt-1 text-xs text-[var(--color-muted)]">
                 Prefills the OA housing-withdrawal calculator.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="increment" className={labelCls}>Salary increment (%/yr)</label>
+              <input
+                id="increment" type="number" min="0" step="0.5" className={inputCls}
+                value={increment} onChange={(e) => setIncrement(e.target.value)}
+                disabled={!canEdit} placeholder="0" aria-label="Salary increment percent per year"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="bonus" className={labelCls}>Annual bonus (months)</label>
+              <input
+                id="bonus" type="number" min="0" step="0.5" className={inputCls}
+                value={bonus} onChange={(e) => setBonus(e.target.value)}
+                disabled={!canEdit} placeholder="0" aria-label="Annual bonus in months"
+              />
+              <p className="mt-1 text-xs text-[var(--color-muted)]">
+                Raises salary yearly and adds a bonus — both feed CPF contributions in every projection.
               </p>
             </div>
 

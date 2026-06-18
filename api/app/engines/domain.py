@@ -60,6 +60,8 @@ class SimulationInput:
     annual_bonus: Decimal = Decimal("0")
     cpf_life_plan: str = "Standard"      # Standard | Escalating | Basic
     payout_age: int = 65                 # 65-70
+    salary_increment: Decimal = Decimal("0")   # yearly raise, fraction (0.03 = 3%)
+    bonus_months: Decimal = Decimal("0")       # annual bonus, in months of salary
 
 
 @dataclass(frozen=True)

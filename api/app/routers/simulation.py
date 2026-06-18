@@ -107,6 +107,8 @@ def simulate(member_id: int, req: SimulateRequest, response: Response, db: Sessi
         annual_bonus=Decimal(str(req.annual_bonus)),
         cpf_life_plan=req.cpf_life_plan,
         payout_age=req.payout_age,
+        salary_increment=Decimal(str(getattr(member, "salary_increment_pct", 0) or 0)),
+        bonus_months=Decimal(str(getattr(member, "bonus_months", 0) or 0)),
     )
 
     # Resolve growth rates: use request values when provided, else fall back to

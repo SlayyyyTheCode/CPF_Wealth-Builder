@@ -94,6 +94,52 @@ def test_determinism_same_input_same_output():
     assert a == b
 
 
+def _two_year(**kw):
+    inp = SimulationInput(
+        opening=AccountState(), dob=date(1986, 1, 1),
+        monthly_gross_wage=Decimal("6000"), employment_status="employee",
+        end_age=42, start_year=2026, **kw,
+    )
+    return run_simulation(inp, resolver)
+
+
+def test_salary_increment_raises_year2_contributions():
+    flat = _two_year()
+    grown = _two_year(salary_increment=Decimal("0.10"))
+    # year 1 identical, year 2 higher with a 10% raise
+    assert grown.years[0].total_contributions == flat.years[0].total_contributions
+    assert grown.years[1].total_contributions > flat.years[1].total_contributions
+
+
+def test_annual_bonus_adds_cpf():
+    none = _two_year()
+    bonus = _two_year(bonus_months=Decimal("2"))
+    # 2-month bonus → extra CPF in each December
+    assert bonus.years[0].total_contributions > none.years[0].total_contributions
+    assert bonus.final.OA > none.final.OA
+
+
+def test_aw_ceiling_caps_bonus_cpf():
+    # High wage: OW already near the AW ceiling, so a huge bonus is mostly capped.
+    big = SimulationInput(
+        opening=AccountState(), dob=date(1986, 1, 1),
+        monthly_gross_wage=Decimal("8000"), employment_status="employee",
+        end_age=41, start_year=2026, bonus_months=Decimal("12"),
+    )
+    res = run_simulation(big, resolver)
+    # OW subject = 12*8000 = 96000; AW room = 102000-96000 = 6000, taxed at 37%.
+    # Bonus CPF base capped at 6000 → contribution_b = round(6000*0.37) = 2220.
+    base = run_simulation(
+        SimulationInput(
+            opening=AccountState(), dob=date(1986, 1, 1),
+            monthly_gross_wage=Decimal("8000"), employment_status="employee",
+            end_age=41, start_year=2026,
+        ),
+        resolver,
+    )
+    assert res.years[0].total_contributions - base.years[0].total_contributions == Decimal("2220")
+
+
 def test_self_employed_rejected():
     inp = SimulationInput(
         opening=AccountState(), dob=date(1986, 1, 1),
