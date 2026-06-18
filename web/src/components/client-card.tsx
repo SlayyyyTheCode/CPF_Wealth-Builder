@@ -76,12 +76,19 @@ export function ClientCard({
           </div>
         )}
       </div>
-      <div className="mt-3 flex justify-between border-t border-[var(--color-border)] pt-3 text-sm">
-        <div><div className="text-xs uppercase text-[var(--color-muted)]">Total CPF</div>
-          <div className="font-bold">{sgd(m.current_total)}</div></div>
-        <div className="text-right"><div className="text-xs uppercase text-[var(--color-muted)]">CPF LIFE</div>
-          <div className="font-bold">{m.latest_run?.cpf_life_monthly ? sgd(m.latest_run.cpf_life_monthly) : "—"}</div></div>
-      </div>
+      {m.has_password && !admin ? (
+        <div className="mt-3 flex items-center gap-2 border-t border-[var(--color-border)] pt-3 text-sm text-[var(--color-muted)]">
+          <span aria-hidden="true">🔒</span>
+          <span>Balances hidden — unlock to view</span>
+        </div>
+      ) : (
+        <div className="mt-3 flex justify-between border-t border-[var(--color-border)] pt-3 text-sm">
+          <div><div className="text-xs uppercase text-[var(--color-muted)]">Total CPF</div>
+            <div className="font-bold">{sgd(m.current_total)}</div></div>
+          <div className="text-right"><div className="text-xs uppercase text-[var(--color-muted)]">CPF LIFE</div>
+            <div className="font-bold">{m.latest_run?.cpf_life_monthly ? sgd(m.latest_run.cpf_life_monthly) : "—"}</div></div>
+        </div>
+      )}
     </Link>
   );
 }
