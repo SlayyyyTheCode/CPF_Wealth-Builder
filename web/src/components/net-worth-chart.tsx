@@ -1,5 +1,6 @@
 "use client";
 import { ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { memo } from "react";
 import type { YearRow } from "@/lib/types";
 
 const COLORS = { OA: "var(--chart-1)", SA: "var(--chart-2)", MA: "var(--chart-3)", RA: "var(--chart-4)" };
@@ -8,7 +9,7 @@ const ORDER = ["OA", "SA", "MA", "RA", "Total"];
 // keep tooltip rows OA → Total (stacked charts otherwise reverse them)
 const sortItems = (i: { dataKey?: unknown }) => ORDER.indexOf(String(i.dataKey));
 
-export function NetWorthChart({ years }: { years: YearRow[] }) {
+export const NetWorthChart = memo(function NetWorthChart({ years }: { years: YearRow[] }) {
   const data = years.map((y) => {
     const Total = y.closing.OA + y.closing.SA + y.closing.MA + y.closing.RA;
     return { age: y.age, ...y.closing, Total };
@@ -34,4 +35,4 @@ export function NetWorthChart({ years }: { years: YearRow[] }) {
       </div>
     </div>
   );
-}
+});

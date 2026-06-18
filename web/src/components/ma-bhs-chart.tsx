@@ -9,11 +9,12 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { memo } from "react";
 import { sgd } from "@/lib/format";
 
 type Series = { age: number; ma: number; bhs: number }[];
 
-export function MaBhsChart({ series }: { series: Series }) {
+export const MaBhsChart = memo(function MaBhsChart({ series }: { series: Series }) {
   return (
     <div
       role="img"
@@ -90,4 +91,4 @@ export function MaBhsChart({ series }: { series: Series }) {
       </div>
     </div>
   );
-}
+});

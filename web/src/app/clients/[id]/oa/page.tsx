@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { memo, use, useEffect, useMemo, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
@@ -171,8 +171,6 @@ export default function OaPage({
     setWiData(data);
   }
 
-  // OA balance over time (for context chart)
-  const oaSeries = years.map((y: YearRow) => ({ age: y.age, oa: Math.round(y.closing.OA) }));
 
   const cardClass =
     "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]";
@@ -285,35 +283,8 @@ export default function OaPage({
         </p>
       </div>
 
-      {/* 5. OA balance chart */}
-      <div
-        role="img"
-        aria-label="OA balance over time by age"
-        className={`${cardClass} mb-4`}
-      >
-        <h3 className={`${labelClass} mb-3`}>OA balance over time</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={oaSeries} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-              <YAxis
-                tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
-                tick={{ fontSize: 11, fill: "var(--color-muted)" }}
-                width={52}
-              />
-              <Tooltip
-                formatter={(v) => [sgd(typeof v === "number" ? v : null), "OA balance"]}
-                labelFormatter={(a) => `Age ${a}`}
-                contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
-              />
-              <Line isAnimationActive={false} type="monotone" dataKey="oa" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
-              <ReferenceLine x={55} stroke="var(--chart-4)" strokeDasharray="4 2" label={{ value: "55 → RA", fontSize: 10, fill: "var(--color-muted)" }} />
-              <ReferenceLine x={age} stroke="var(--color-primary)" strokeOpacity={0.4} strokeDasharray="4 2" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      {/* 5. OA balance chart (memoised — unaffected by scrubber / calculator state) */}
+      <OaBalanceChart years={years} cardClass={cardClass} labelClass={labelClass} />
 
       {/* 6. OA → RA at 55 card */}
       <div className={`${cardClass} mb-4`}>
@@ -630,3 +601,31 @@ export default function OaPage({
     </>
   );
 }
+
+// Memoised OA balance chart — re-renders only when the projection changes, so
+// the year scrubber and calculator inputs no longer re-render it.
+const OaBalanceChart = memo(function OaBalanceChart({
+  years, cardClass, labelClass,
+}: { years: YearRow[]; cardClass: string; labelClass: string }) {
+  const data = useMemo(
+    () => years.map((y) => ({ age: y.age, oa: Math.round(y.closing.OA) })),
+    [years],
+  );
+  return (
+    <div role="img" aria-label="OA balance over time by age" className={`${cardClass} mb-4`}>
+      <h3 className={`${labelClass} mb-3`}>OA balance over time</h3>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+            <YAxis tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={52} />
+            <Tooltip formatter={(v) => [sgd(typeof v === "number" ? v : null), "OA balance"]} labelFormatter={(a) => `Age ${a}`} contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }} />
+            <Line isAnimationActive={false} type="monotone" dataKey="oa" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+            <ReferenceLine x={55} stroke="var(--chart-4)" strokeDasharray="4 2" label={{ value: "55 → RA", fontSize: 10, fill: "var(--color-muted)" }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+});

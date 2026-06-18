@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { memo, use, useEffect, useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -144,14 +144,6 @@ export default function SaPage({
   const maToSaCumulative = years
     .filter((y) => y.age <= age)
     .reduce((s, y) => s + (y.overflow_out?.ma_to_sa ?? 0), 0);
-
-  // Chart series — FRS/ERS projected per year
-  const chartData = years.map((y) => ({
-    age: y.age,
-    balance: retBal(y),
-    frs: Math.round(proj(frs, y.year)),
-    ers: Math.round(proj(ers, y.year)),
-  }));
 
   // Baseline FRS-hit age (against that year's projected FRS)
   const baseFrsAge = years.find((y) => retBal(y) >= proj(frs, y.year))?.age ?? null;
@@ -358,105 +350,8 @@ export default function SaPage({
         </p>
       </div>
 
-      {/* 6. SA growth chart */}
-      <div
-        role="img"
-        aria-label="SA/RA balance versus FRS and ERS reference lines by age"
-        className={`${cardClass} mb-4`}
-      >
-        <h3 className={`${labelClass} mb-3`}>SA / RA balance over time</h3>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={chartData}
-              margin={{ top: 4, right: 16, left: 8, bottom: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis
-                dataKey="age"
-                tick={{ fontSize: 11, fill: "var(--color-muted)" }}
-                label={{
-                  value: "Age",
-                  position: "insideBottom",
-                  offset: -2,
-                  fontSize: 11,
-                }}
-              />
-              <YAxis
-                tickFormatter={(v: number) =>
-                  v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`
-                }
-                tick={{ fontSize: 11, fill: "var(--color-muted)" }}
-                width={56}
-              />
-              <Tooltip
-                formatter={(value, name) => {
-                  const labels: Record<string, string> = {
-                    balance: "SA / RA balance",
-                    frs: "Full Retirement Sum",
-                    ers: "Enhanced Retirement Sum",
-                  };
-                  return [
-                    sgd(typeof value === "number" ? value : null),
-                    labels[String(name)] ?? String(name),
-                  ];
-                }}
-                labelFormatter={(a) => `Age ${a}`}
-                contentStyle={{
-                  background: "var(--color-surface-raised)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-              />
-              <Legend
-                formatter={(value) => {
-                  const labels: Record<string, string> = {
-                    balance: "SA / RA balance",
-                    frs: "Full Retirement Sum",
-                    ers: "Enhanced Retirement Sum",
-                  };
-                  return labels[value] ?? value;
-                }}
-                wrapperStyle={{ fontSize: "12px" }}
-              />
-              <Line isAnimationActive={false}
-                type="monotone"
-                dataKey="balance"
-                stroke="var(--chart-1)"
-                strokeWidth={2.5}
-                dot={false}
-                name="balance"
-              />
-              <Line isAnimationActive={false}
-                type="monotone"
-                dataKey="frs"
-                stroke="var(--chart-3)"
-                strokeWidth={1.5}
-                strokeDasharray="6 3"
-                dot={false}
-                name="frs"
-              />
-              <Line isAnimationActive={false}
-                type="monotone"
-                dataKey="ers"
-                stroke="var(--chart-4)"
-                strokeWidth={1.5}
-                strokeDasharray="3 3"
-                dot={false}
-                name="ers"
-              />
-              {/* Mark selected age */}
-              <ReferenceLine
-                x={age}
-                stroke="var(--color-primary)"
-                strokeOpacity={0.4}
-                strokeDasharray="4 2"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      {/* 6. SA growth chart (memoised — unaffected by scrubber / calculator state) */}
+      <SaBalanceChart years={years} frs={frs} ers={ers} sumRate={sumRate} baseYear={baseYear} cardClass={cardClass} labelClass={labelClass} />
 
       {/* 7. Top-up what-if calculator */}
       <div className={`${cardClass} mb-4`}>
@@ -608,3 +503,47 @@ export default function SaPage({
     </>
   );
 }
+
+// Memoised SA/RA balance chart — re-renders only when its data changes, so the
+// year scrubber and calculator inputs no longer trigger a chart re-render.
+const LABELS: Record<string, string> = {
+  balance: "SA / RA balance",
+  frs: "Full Retirement Sum",
+  ers: "Enhanced Retirement Sum",
+};
+const SaBalanceChart = memo(function SaBalanceChart({
+  years, frs, ers, sumRate, baseYear, cardClass, labelClass,
+}: {
+  years: YearRow[]; frs: number; ers: number; sumRate: number; baseYear: number;
+  cardClass: string; labelClass: string;
+}) {
+  const data = useMemo(
+    () => years.map((y) => ({
+      age: y.age,
+      balance: retBal(y),
+      frs: Math.round(frs * (1 + sumRate) ** Math.max(y.year - baseYear, 0)),
+      ers: Math.round(ers * (1 + sumRate) ** Math.max(y.year - baseYear, 0)),
+    })),
+    [years, frs, ers, sumRate, baseYear],
+  );
+  return (
+    <div role="img" aria-label="SA/RA balance versus FRS and ERS reference lines by age" className={`${cardClass} mb-4`}>
+      <h3 className={`${labelClass} mb-3`}>SA / RA balance over time</h3>
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 4, right: 16, left: 8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} label={{ value: "Age", position: "insideBottom", offset: -2, fontSize: 11 }} />
+            <YAxis tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={56} />
+            <Tooltip formatter={(value, name) => [sgd(typeof value === "number" ? value : null), LABELS[String(name)] ?? String(name)]} labelFormatter={(a) => `Age ${a}`} contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }} />
+            <Legend formatter={(value) => LABELS[value] ?? value} wrapperStyle={{ fontSize: "12px" }} />
+            <Line isAnimationActive={false} type="monotone" dataKey="balance" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} name="balance" />
+            <Line isAnimationActive={false} type="monotone" dataKey="frs" stroke="var(--chart-3)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} name="frs" />
+            <Line isAnimationActive={false} type="monotone" dataKey="ers" stroke="var(--chart-4)" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="ers" />
+            <ReferenceLine x={55} stroke="var(--color-primary)" strokeOpacity={0.35} strokeDasharray="4 2" label={{ value: "55", fontSize: 10, fill: "var(--color-muted)" }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+});

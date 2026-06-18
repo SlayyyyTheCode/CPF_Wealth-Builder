@@ -1,5 +1,6 @@
 "use client";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { memo } from "react";
 import type { YearRow } from "@/lib/types";
 
 const COLORS = { OA: "var(--chart-1)", SA: "var(--chart-2)", MA: "var(--chart-3)", RA: "var(--chart-4)" };
@@ -8,7 +9,7 @@ const ORDER = ["OA", "SA", "MA", "RA", "Total"];
 // keep tooltip rows OA → Total (stacked charts otherwise reverse them)
 const sortItems = (i: { dataKey?: unknown }) => ORDER.indexOf(String(i.dataKey));
 
-export function AccountBreakdownChart({ years }: { years: YearRow[] }) {
+export const AccountBreakdownChart = memo(function AccountBreakdownChart({ years }: { years: YearRow[] }) {
   const data = years
     .filter((y) => y.age % 5 === 0)
     .map((y) => {
@@ -36,4 +37,4 @@ export function AccountBreakdownChart({ years }: { years: YearRow[] }) {
       </div>
     </div>
   );
-}
+});

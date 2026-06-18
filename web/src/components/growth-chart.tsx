@@ -1,5 +1,6 @@
 "use client";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { memo } from "react";
 import type { YearRow } from "@/lib/types";
 
 const SERIES = [
@@ -11,7 +12,7 @@ const SERIES = [
   { key: "Total contribution", color: "var(--chart-grey)" },
 ] as const;
 
-export function GrowthChart({ years }: { years: YearRow[] }) {
+export const GrowthChart = memo(function GrowthChart({ years }: { years: YearRow[] }) {
   const cum = { OA: 0, SA: 0, MA: 0, RA: 0, contrib: 0 };
   const data = years.map((y) => {
     const ib = y.interest_by_account ?? { OA: 0, SA: 0, MA: 0, RA: 0 };
@@ -58,4 +59,4 @@ export function GrowthChart({ years }: { years: YearRow[] }) {
       </div>
     </div>
   );
-}
+});
