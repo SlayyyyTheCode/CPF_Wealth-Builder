@@ -136,7 +136,14 @@ export default function SaPage({
 
   const saToOa = yr?.overflow_out?.sa_to_oa ?? 0;
   const saToRa = yr?.overflow_out?.sa_to_ra ?? 0;
+  // MA overflows INTO the SA once the BHS is reached (pre-55). This inflow is
+  // already part of the SA balance the projection reports.
+  const maToSaYear = yr?.overflow_out?.ma_to_sa ?? 0;
   const hasOverflow = saToOa > 0 || saToRa > 0;
+  // Cumulative MA→SA overflow up to & including the selected year.
+  const maToSaCumulative = years
+    .filter((y) => y.age <= age)
+    .reduce((s, y) => s + (y.overflow_out?.ma_to_sa ?? 0), 0);
 
   // Chart series — FRS/ERS projected per year
   const chartData = years.map((y) => ({
@@ -302,30 +309,37 @@ export default function SaPage({
         </div>
       )}
 
-      {/* 4. SA overflow card */}
+      {/* 4. SA inflow/overflow card */}
       <div className={`${cardClass} mb-4`}>
-        <h3 className={`${labelClass} mb-3`}>SA overflow (age {age})</h3>
-        {hasOverflow ? (
-          <>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-[var(--color-muted)]">SA → OA</p>
-                <p className="mt-0.5 font-semibold tabular-nums">{sgd(saToOa)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[var(--color-muted)]">SA → RA</p>
-                <p className="mt-0.5 font-semibold tabular-nums">{sgd(saToRa)}</p>
-              </div>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-[var(--color-muted)]">
-            No SA overflow this year.
+        <h3 className={`${labelClass} mb-3`}>SA inflows &amp; overflow (age {age})</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">MA → SA (BHS overflow)</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(maToSaYear)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">SA → OA</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(saToOa)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">SA → RA</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(saToRa)}</p>
+          </div>
+        </div>
+        {maToSaCumulative > 0 && (
+          <p className="mt-3 text-sm">
+            <span className="text-[var(--color-muted)]">MA → SA overflow to date: </span>
+            <span className="font-semibold tabular-nums text-[var(--color-primary)]">{sgd(maToSaCumulative)}</span>
+            <span className="text-[var(--color-muted)]"> (already inside the SA balance)</span>
           </p>
         )}
+        {!hasOverflow && maToSaYear === 0 && (
+          <p className="mt-3 text-sm text-[var(--color-muted)]">No SA inflow or overflow this year.</p>
+        )}
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          At 55, amounts above your retirement sum move from SA to OA. SA
-          contributions also overflow to OA once FRS is reached. If your SA + OA
+          Once MediSave reaches the Basic Healthcare Sum (BHS), the excess overflows into the SA
+          (before 55) and compounds at the SA rate. At 55, amounts above your retirement sum move
+          from SA to OA; SA contributions also overflow to OA once FRS is reached. If your SA + OA
           can&apos;t meet the FRS at 55, up to $5,000 stays withdrawable in your OA.
         </p>
       </div>
@@ -588,7 +602,7 @@ export default function SaPage({
         )}
 
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Estimate: starting at the chosen age, each year&apos;s top-up is compounded at the ~4% SA floor rate and added to the projected balance. Top-ups are only allowed until the FRS is reached.
+          Estimate: the baseline already includes the MA → SA overflow after the BHS is reached. On top of that, starting at the chosen age, each year&apos;s top-up is compounded at the ~4% SA floor rate. Top-ups are only allowed until the FRS is reached.
         </p>
       </div>
     </>
