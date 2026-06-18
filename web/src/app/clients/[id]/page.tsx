@@ -46,6 +46,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
     );
 
   const totalInterest = lifetimeInterest(res);
+  const yearAt = (age: number) => res.years.find((y) => y.age === age)?.year;
 
   return (
     <>
@@ -55,10 +56,10 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
         subtitle="CPF net worth, projections and retirement readiness at a glance."
       />
       <section aria-label="Key figures" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard hero label="Total CPF now" value={sgd(total(member.balances))} />
-        <KpiCard label="Projected at 55" value={atAge(res, 55)} />
-        <KpiCard label="Projected at 65" value={atAge(res, 65)} />
-        <KpiCard label="Projected at 90" value={atAge(res, 90)} />
+        <KpiCard hero label="Total CPF now" value={sgd(total(member.balances))} sub="across OA · SA · MA · RA" />
+        <KpiCard label="Projected at 55" value={atAge(res, 55)} sub={`RA forms${yearAt(55) ? ` · ${yearAt(55)}` : ""}`} />
+        <KpiCard label="Projected at 65" value={atAge(res, 65)} sub={`CPF LIFE age${yearAt(65) ? ` · ${yearAt(65)}` : ""}`} />
+        <KpiCard label="Projected at 90" value={atAge(res, 90)} sub={yearAt(90) ? `Year ${yearAt(90)}` : "lifetime"} />
       </section>
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div>
@@ -66,7 +67,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
           <p className="mt-2 text-xs text-[var(--color-muted)]">Projected monthly: contributions are allocated to OA/SA/MA by age-band rates, overflow rules applied, then interest credited yearly.</p>
         </div>
         <div className="grid gap-4">
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
             <h3 className="mb-2 text-sm font-semibold">Retirement readiness</h3>
             <ReadinessRing r={res.readiness} />
             <p className="mt-2 text-xs text-[var(--color-muted)]">Score = 70% × (RA at 55 ÷ FRS) + 30% × (MA at 55 ÷ BHS), capped at 100.</p>
