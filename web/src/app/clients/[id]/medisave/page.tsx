@@ -36,13 +36,14 @@ export default function MedisavePage({
 
   // Insurance drawdown calculator state
   const [maNow, setMaNow] = useState(0);          // current MA balance
-  const [withdraw, setWithdraw] = useState(0);     // amount drawn now
+  const [withdraw, setWithdraw] = useState(0);     // annual insurance withdrawal (S$/yr)
   const [drawYears, setDrawYears] = useState(10);
   const [drawRate, setDrawRate] = useState(4);
   const [drawResult, setDrawResult] = useState<
     {
-      after: number;
       projected: number;
+      totalWithdrawn: number;
+      contributions: number;
       interest: number;
       series: { age: number; ma: number; bhs: number; maAfter: number | null }[];
     } | null
@@ -126,23 +127,44 @@ export default function MedisavePage({
   const totalOverflow = maToSa + maToOa + maToRa;
   const hasOverflow = totalOverflow > 0;
 
-  // Insurance drawdown calculator — committed on "Calculate"
+  // Insurance drawdown calculator — committed on "Calculate".
+  // Each year: MA compounds monthly at the MA rate + receives the engine's MA
+  // contribution (capped at that year's BHS), then a one-off insurance premium
+  // is withdrawn. Recurring for `drawYears`.
   function calcDrawdown() {
     if (!medisave) return;
-    const r = drawRate / 100;
-    const after = Math.max(maNow - withdraw, 0);
-    const projected = after * (1 + r) ** drawYears;
+    const rm = drawRate / 100 / 12;
     const startAge = years[0].age;
+    let ma = maNow;
+    let totalWithdrawn = 0;
+    let contributions = 0;
+    const proj: Record<number, number> = { [startAge]: Math.round(ma) };
+    for (let i = 0; i < drawYears; i++) {
+      const a = startAge + i;
+      const monthlyContrib = (years.find((y) => y.age === a)?.contribution_by_account?.MA ?? 0) / 12;
+      const bhs = medisave.series.find((s) => s.age === a)?.bhs ?? Infinity;
+      for (let m = 0; m < 12; m++) {
+        ma = Math.min(ma * (1 + rm) + monthlyContrib, bhs);
+        contributions += monthlyContrib;
+      }
+      const w = Math.min(withdraw, ma);
+      ma -= w;
+      totalWithdrawn += w;
+      proj[a + 1] = Math.round(ma);
+    }
     const series = medisave.series.map((s) => ({
       age: s.age,
       ma: s.ma,
       bhs: s.bhs,
-      maAfter:
-        s.age >= startAge && s.age <= startAge + drawYears
-          ? Math.round(after * (1 + r) ** (s.age - startAge))
-          : null,
+      maAfter: s.age in proj ? proj[s.age] : null,
     }));
-    setDrawResult({ after, projected, interest: projected - after, series });
+    setDrawResult({
+      projected: ma,
+      totalWithdrawn,
+      contributions,
+      interest: ma + totalWithdrawn - maNow - contributions,
+      series,
+    });
   }
 
   // MA contribution from wage (employee + employer) — exact engine figure for
@@ -352,7 +374,7 @@ export default function MedisavePage({
           </div>
           <div>
             <label htmlFor="ma-withdraw" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Withdraw from MA now (S$)
+              Annual insurance withdrawal (S$/yr)
             </label>
             <input
               id="ma-withdraw"
@@ -363,7 +385,7 @@ export default function MedisavePage({
               placeholder="0"
               onChange={(e) => setWithdraw(Math.max(0, Number(e.target.value)))}
               className={inputClass}
-              aria-label="Amount withdrawn from MediSave now"
+              aria-label="Annual insurance withdrawal from MediSave per year"
             />
           </div>
           <div>
@@ -414,14 +436,14 @@ export default function MedisavePage({
             className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
           >
             <div>
-              <p className="text-xs text-[var(--color-muted)]">MA after withdrawal</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.after)}</p>
-            </div>
-            <div>
               <p className="text-xs text-[var(--color-muted)]">
                 Projected MA after {drawYears} yr{drawYears > 1 ? "s" : ""}
               </p>
               <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.projected)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Total withdrawn for insurance</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.totalWithdrawn)}</p>
             </div>
             <div>
               <p className="text-xs text-[var(--color-muted)]">MA interest earned</p>
@@ -450,13 +472,13 @@ export default function MedisavePage({
                 <Tooltip
                   formatter={(v, name) => [
                     sgd(typeof v === "number" ? v : null),
-                    name === "ma" ? "MA balance" : name === "bhs" ? "BHS" : "MA after withdrawal",
+                    name === "ma" ? "MA balance" : name === "bhs" ? "BHS" : "MA after yearly withdrawals",
                   ]}
                   labelFormatter={(a) => `Age ${a}`}
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
                 <Legend
-                  formatter={(v) => (v === "ma" ? "MA balance" : v === "bhs" ? "BHS" : "MA after withdrawal")}
+                  formatter={(v) => (v === "ma" ? "MA balance" : v === "bhs" ? "BHS" : "MA after yearly withdrawals")}
                   wrapperStyle={{ fontSize: "12px" }}
                 />
                 <Line isAnimationActive={false} type="monotone" dataKey="ma" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
@@ -468,7 +490,9 @@ export default function MedisavePage({
         )}
 
         <p className="mt-2 text-xs text-[var(--color-muted)]">
-          Projects your MediSave after deducting the withdrawal, compounding the remainder at the rate above. Prefilled with the current MA balance — edit any field, then Calculate.
+          Each year the insurance premium is withdrawn from MA; in between, the balance keeps earning
+          the MA rate (monthly) and receiving the projected MA contribution, capped at that year&apos;s
+          BHS. Prefilled with the current MA balance — edit any field, then Calculate.
         </p>
       </div>
 
