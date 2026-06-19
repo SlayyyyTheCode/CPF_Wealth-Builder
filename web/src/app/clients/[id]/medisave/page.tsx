@@ -138,13 +138,19 @@ export default function MedisavePage({
     let ma = maNow;
     let totalWithdrawn = 0;
     let contributions = 0;
+    let interest = 0;
     const proj: Record<number, number> = { [startAge]: Math.round(ma) };
     for (let i = 0; i < drawYears; i++) {
       const a = startAge + i;
       const monthlyContrib = (years.find((y) => y.age === a)?.contribution_by_account?.MA ?? 0) / 12;
       const bhs = medisave.series.find((s) => s.age === a)?.bhs ?? Infinity;
       for (let m = 0; m < 12; m++) {
-        ma = Math.min(ma * (1 + rm) + monthlyContrib, bhs);
+        // Interest earned on the running balance (always positive), credited
+        // before contribution. BHS cap only sheds the excess of contribution
+        // (overflow leaves MA) — it never negates interest already earned.
+        const gain = ma * rm;
+        interest += gain;
+        ma = Math.min(ma + gain + monthlyContrib, bhs);
         contributions += monthlyContrib;
       }
       const w = Math.min(withdraw, ma);
@@ -162,7 +168,7 @@ export default function MedisavePage({
       projected: ma,
       totalWithdrawn,
       contributions,
-      interest: ma + totalWithdrawn - maNow - contributions,
+      interest,
       series,
     });
   }
