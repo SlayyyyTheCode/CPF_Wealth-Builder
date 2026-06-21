@@ -40,7 +40,7 @@ function ProjectionPanel({
 
   return (
     <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
-      <h2 className="text-lg font-bold text-[var(--color-fg)]">Project the targets forward</h2>
+      <h2 className="text-lg font-bold text-[var(--color-fg)]">Projected CPF Figures across the Years</h2>
       <p className="mt-1 text-sm text-[var(--color-muted)]">
         Targets rise over time. Pick how many years ahead to see the projected sums you&apos;ll need to hit.
       </p>
