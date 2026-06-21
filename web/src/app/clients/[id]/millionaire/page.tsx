@@ -3,7 +3,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
-import { simulate, simulateWhatIf, getMember, getActivePolicy } from "@/lib/api";
+import { simulate, simulateWhatIf, getMember, getActivePolicy, peekMember, peekSim, peekPolicy } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
 import { PageHeading, MillionaireIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
@@ -66,9 +66,9 @@ const tooltipStyle = {
 export default function MillionairePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { isAdmin } = useAdmin();
-  const [res, setRes] = useState<SimResult | null>(null);
-  const [member, setMember] = useState<Member | null>(null);
-  const [policy, setPolicy] = useState<Record<string, unknown> | null>(null);
+  const [res, setRes] = useState<SimResult | null>(() => peekSim(Number(id))?.result ?? null);
+  const [member, setMember] = useState<Member | null>(() => peekMember(Number(id)));
+  const [policy, setPolicy] = useState<Record<string, unknown> | null>(() => peekPolicy(new Date().getFullYear()));
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {

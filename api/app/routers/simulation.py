@@ -140,6 +140,10 @@ def simulate(member_id: int, req: SimulateRequest, response: Response, db: Sessi
     do_persist = req.persist and req.override_balances is None
 
     if not do_persist:
+        # Read-only dashboard path: the web client never reads the per-month
+        # series (only years[]). Drop it to shrink the wire payload ~50% — faster
+        # transfer + JSON parse on first load. Persisted runs keep months.
+        read_payload = {k: v for k, v in result_payload.items() if k != "months"}
         return {
             "id": 0,
             "member_id": member_id,
@@ -148,7 +152,7 @@ def simulate(member_id: int, req: SimulateRequest, response: Response, db: Sessi
             "retirement_sum_target": req.retirement_sum_target,
             "annual_bonus": req.annual_bonus,
             "policy_snapshot_id": None,
-            "result": result_payload,
+            "result": read_payload,
         }
 
     snap = db.scalars(

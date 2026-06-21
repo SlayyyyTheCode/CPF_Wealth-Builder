@@ -3,7 +3,7 @@ import { memo, use, useEffect, useMemo, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
-import { simulate, getMember, getActivePolicy } from "@/lib/api";
+import { simulate, getMember, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, OrdinaryIcon, HousingIcon, RocketIcon } from "@/components/icons";
@@ -28,8 +28,8 @@ export default function OaPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [res, setRes] = useState<SimResult | null>(null);
-  const [member, setMember] = useState<Member | null>(null);
+  const [res, setRes] = useState<SimResult | null>(() => peekSim(Number(id))?.result ?? null);
+  const [member, setMember] = useState<Member | null>(() => peekMember(Number(id)));
   const [owCeiling, setOwCeiling] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
 
@@ -56,8 +56,8 @@ export default function OaPage({
     { age: number; baseline: number; withTopup: number }[] | null
   >(null);
 
-  // Scrubber state
-  const [age, setAge] = useState<number | null>(null);
+  // Scrubber state — seed from warm cache so the page paints fully on tab switch.
+  const [age, setAge] = useState<number | null>(() => peekSim(Number(id))?.result.years[0]?.age ?? null);
 
   useEffect(() => {
     let ok = true;

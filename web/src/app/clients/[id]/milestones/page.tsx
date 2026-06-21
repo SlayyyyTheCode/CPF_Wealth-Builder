@@ -1,6 +1,6 @@
 "use client";
 import { use, useEffect, useState } from "react";
-import { simulate, getMember, getActivePolicy } from "@/lib/api";
+import { simulate, getMember, getActivePolicy, peekMember, peekSim, peekPolicy } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
 import { TargetTimeline } from "@/components/target-timeline";
 import { PageHeading, MilestonesIcon } from "@/components/icons";
@@ -85,9 +85,11 @@ export default function MilestonesPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [res, setRes] = useState<SimResult | null>(null);
-  const [member, setMember] = useState<Member | null>(null);
-  const [policy, setPolicy] = useState<PolicySnapshot | null>(null);
+  const [res, setRes] = useState<SimResult | null>(() => peekSim(Number(id))?.result ?? null);
+  const [member, setMember] = useState<Member | null>(() => peekMember(Number(id)));
+  const [policy, setPolicy] = useState<PolicySnapshot | null>(
+    () => (peekPolicy(new Date().getFullYear()) as PolicySnapshot | null) ?? null,
+  );
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {

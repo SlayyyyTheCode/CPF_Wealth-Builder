@@ -8,7 +8,7 @@ import { AccountBreakdownChart } from "@/components/account-breakdown-chart";
 import { GrowthChart } from "@/components/growth-chart";
 import { PageHeading, OverviewIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
-import { getMember, simulate } from "@/lib/api";
+import { getMember, simulate, peekMember, peekSim } from "@/lib/api";
 import type { Member, SimResult, Balances } from "@/lib/types";
 import { sgd, sgdCompact } from "@/lib/format";
 
@@ -22,8 +22,8 @@ const lifetimeInterest = (r: SimResult): number =>
 
 export default function ClientDashboard({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [member, setMember] = useState<Member | null>(null);
-  const [res, setRes] = useState<SimResult | null>(null);
+  const [member, setMember] = useState<Member | null>(() => peekMember(Number(id)));
+  const [res, setRes] = useState<SimResult | null>(() => peekSim(Number(id))?.result ?? null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {

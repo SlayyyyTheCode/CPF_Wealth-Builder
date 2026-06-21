@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { simulate, getMember, getActivePolicy } from "@/lib/api";
+import { simulate, getMember, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
@@ -44,8 +44,8 @@ export default function SaPage({
 }) {
   const { id } = use(params);
 
-  const [res, setRes] = useState<SimResult | null>(null);
-  const [member, setMember] = useState<Member | null>(null);
+  const [res, setRes] = useState<SimResult | null>(() => peekSim(Number(id))?.result ?? null);
+  const [member, setMember] = useState<Member | null>(() => peekMember(Number(id)));
   const [frs, setFrs] = useState<number>(0);   // base (today's) FRS
   const [ers, setErs] = useState<number>(0);   // base (today's) ERS
   const [sumRate, setSumRate] = useState<number>(0.035);
@@ -53,8 +53,8 @@ export default function SaPage({
   const [owCeiling, setOwCeiling] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
 
-  // Scrubber
-  const [age, setAge] = useState<number | null>(null);
+  // Scrubber — seed from warm cache so the page paints fully on tab switch.
+  const [age, setAge] = useState<number | null>(() => peekSim(Number(id))?.result.years[0]?.age ?? null);
 
   // Top-up what-if (yearly) — computed client-side
   const [topup, setTopup] = useState<number>(0);

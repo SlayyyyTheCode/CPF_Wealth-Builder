@@ -13,14 +13,27 @@ export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 // ── tiny client cache: reuse one projection/member/policy across tab switches ──
 const _cache = new Map<string, Promise<unknown>>();
+// Resolved values kept alongside the promise so a tab can read warm data
+// *synchronously* on mount (no skeleton flash when switching tabs).
+const _settled = new Map<string, unknown>();
 function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
   if (!_cache.has(key)) {
-    _cache.set(key, fn().catch((e) => { _cache.delete(key); throw e; }));
+    _cache.set(
+      key,
+      fn()
+        .then((v) => { _settled.set(key, v); return v; })
+        .catch((e) => { _cache.delete(key); throw e; }),
+    );
   }
   return _cache.get(key) as Promise<T>;
 }
+/** Synchronously read an already-resolved cached value, else null. */
+function peek<T>(key: string): T | null {
+  return (_settled.get(key) as T) ?? null;
+}
 function invalidate(prefix: string) {
   for (const k of _cache.keys()) if (k.startsWith(prefix)) _cache.delete(k);
+  for (const k of _settled.keys()) if (k.startsWith(prefix)) _settled.delete(k);
 }
 function invalidateMember(id: number) {
   invalidate(`member:${id}`);
@@ -97,6 +110,13 @@ export const simulate = (id: number, end_age = 90) =>
 export const getAnalysis = (id: number, body: Record<string, unknown> = {}) =>
   cached(`analysis:${id}:${JSON.stringify(body)}`, () =>
     apiPost<Analysis>(`/members/${id}/analysis`, body));
+
+// Synchronous warm-cache reads — let a page render with data already on its
+// first frame (set by warmClient on entering the client), skipping the loading
+// skeleton on tab switches.
+export const peekSim = (id: number, end_age = 91) => peek<SimRun>(`sim:${id}:${end_age}`);
+export const peekMember = (id: number) => peek<Member>(`member:${id}`);
+export const peekPolicy = (year: number) => peek<Record<string, unknown>>(`policy:${year}`);
 
 // Kick off the shared projection + active policy as early as possible (on
 // entering a client) so every tab reuses one cached result. Fire-and-forget.
