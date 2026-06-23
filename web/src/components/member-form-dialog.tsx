@@ -21,6 +21,14 @@ function ageFromMMYYYY(s: string): number | null {
   return new Date().getFullYear() - Number(m[2]);
 }
 
+// Auto-format typed digits into MM/YYYY (insert the "/" so users — esp. on
+// mobile — never have to type the slash themselves).
+function formatDob(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 6); // MMYYYY
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}/${d.slice(2)}`;
+}
+
 export function MemberFormDialog({
   open, onClose, onCreated,
 }: { open: boolean; onClose: () => void; onCreated: () => void }) {
@@ -96,7 +104,8 @@ export function MemberFormDialog({
           <label className="text-sm">
             Date of birth (MM/YYYY)
             <input className={field} value={f.dob} inputMode="numeric" placeholder="MM/YYYY"
-              onChange={(e) => setF({ ...f, dob: e.target.value })} />
+              maxLength={7}
+              onChange={(e) => setF({ ...f, dob: formatDob(e.target.value) })} />
           </label>
 
           <label className="text-sm">
