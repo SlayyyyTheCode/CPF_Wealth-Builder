@@ -11,6 +11,14 @@ const PREMATURE_PENALTY = 0.05;
 const SPREAD_YEARS = 10;
 const ZERO_TAX_BAND = 20000; // first $20k of chargeable income is taxed at 0%
 
+interface ScheduleRow {
+  year: number;
+  withdraw: number;
+  tax: number;
+  remainingAfter: number;   // SRS left to withdraw after this year's draw
+  cumulativeTax: number;    // accumulated tax through this year
+}
+
 interface Optimal {
   evenDraw: number;          // recommended equal yearly withdrawal (balance/10)
   taxFreePerYear: number;    // max SRS draw/yr that stays untaxed, given other income
@@ -18,6 +26,7 @@ interface Optimal {
   totalTax: number;          // total tax under the even-spread plan
   fullyTaxFree: boolean;
   excessPerYear: number;     // taxable-bracket portion above the tax-free draw
+  schedule: ScheduleRow[];   // year-by-year breakdown of the even-spread plan
   // "keep invested during the 10-year drawdown" scenario
   investedDraw: number;      // level annual withdrawal that exhausts the invested pot
   investedTotal: number;     // total withdrawn over 10 years (> balance from growth)
@@ -40,6 +49,18 @@ function computeOptimal(balance: number, income: number, altRatePct: number): Op
   const baseTax = incomeTax(income);
   const yearTax = incomeTax(income + evenDraw * TAXABLE_FRACTION) - baseTax;
 
+  // year-by-year schedule for the even-spread plan
+  const schedule: ScheduleRow[] = Array.from({ length: SPREAD_YEARS }, (_, i) => {
+    const year = i + 1;
+    return {
+      year,
+      withdraw: evenDraw,
+      tax: yearTax,
+      remainingAfter: Math.max(0, balance - evenDraw * year),
+      cumulativeTax: yearTax * year,
+    };
+  });
+
   // invested drawdown: level payment that empties a pot earning r over 10 yrs
   const r = altRatePct / 100;
   const investedDraw = r > 0
@@ -56,6 +77,7 @@ function computeOptimal(balance: number, income: number, altRatePct: number): Op
     totalTax: yearTax * SPREAD_YEARS,
     fullyTaxFree: evenDraw <= taxFreePerYear + 0.01,
     excessPerYear: Math.max(0, evenDraw - taxFreePerYear),
+    schedule,
     investedDraw,
     investedTotal,
     investedTax,
@@ -267,6 +289,47 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
               <dd className="tabular-nums text-[var(--color-primary)]">{sgd(optimal.totalTax)}</dd>
             </div>
           </dl>
+
+          {/* year-by-year breakdown */}
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="sr-only">Year-by-year SRS withdrawal, tax, remaining balance and cumulative tax</caption>
+              <thead>
+                <tr className="text-xs text-[var(--color-muted)]">
+                  <th scope="col" className="py-1 text-left font-medium">Year</th>
+                  <th scope="col" className="py-1 text-right font-medium">Withdraw</th>
+                  <th scope="col" className="py-1 text-right font-medium">Tax</th>
+                  <th scope="col" className="py-1 text-right font-medium">Left to withdraw</th>
+                  <th scope="col" className="py-1 text-right font-medium">Cumulative tax</th>
+                </tr>
+              </thead>
+              <tbody>
+                {optimal.schedule.map((row) => (
+                  <tr key={row.year} className="border-t border-[var(--color-border)]">
+                    <td className="py-1">{row.year}</td>
+                    <td className="py-1 text-right tabular-nums">{sgd(row.withdraw)}</td>
+                    <td className="py-1 text-right tabular-nums">{sgd(row.tax)}</td>
+                    <td className="py-1 text-right tabular-nums">{sgd(row.remainingAfter)}</td>
+                    <td className="py-1 text-right tabular-nums">{sgd(row.cumulativeTax)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[var(--color-border)] font-medium">
+                  <td className="py-1">Total</td>
+                  <td className="py-1 text-right tabular-nums">{sgd(optimal.evenDraw * SPREAD_YEARS)}</td>
+                  <td className="py-1 text-right tabular-nums text-[var(--color-primary)]">{sgd(optimal.totalTax)}</td>
+                  <td className="py-1 text-right tabular-nums">{sgd(0)}</td>
+                  <td className="py-1 text-right tabular-nums text-[var(--color-primary)]">{sgd(optimal.totalTax)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Withdraw the same amount each year so the taxable half stays in the
+              lowest possible bracket. The balance falls to {sgd(0)} after year 10;
+              cumulative tax reaches {sgd(optimal.totalTax)}.
+            </p>
+          </div>
 
           {/* keep-invested scenario */}
           <div className="mt-3 rounded-lg border border-[var(--color-border)] p-3">
