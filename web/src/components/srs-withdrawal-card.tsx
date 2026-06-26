@@ -4,10 +4,10 @@ import { sgd } from "@/lib/format";
 import { incomeTax } from "@/lib/sg-tax";
 import type { SrsWithdrawal, SrsWithdrawalLeg } from "@/lib/types";
 
-// Per product spec, the full withdrawal amount is treated as chargeable income
-// each year (IRAS progressive brackets). NB: Singapore's statutory SRS rule
-// taxes only 50% of a qualifying withdrawal, but this tool models 100% taxable.
-const TAXABLE_FRACTION = 1.0;
+// At/after the statutory retirement age, only 50% of each SRS withdrawal is
+// chargeable to income tax (the spread concession). A premature withdrawal is
+// 100% taxable plus a 5% penalty.
+const TAXABLE_FRACTION = 0.5;
 const PREMATURE_PENALTY = 0.05;
 const SPREAD_YEARS = 10;
 const ZERO_TAX_BAND = 20000; // first $20k of chargeable income is taxed at 0%
@@ -33,13 +33,14 @@ interface Optimal {
 
 /** Lowest-tax 10-year drawdown of `sum`. Income tax is convex (IRAS resident
  *  brackets), so equal yearly draws are provably the minimum-tax schedule for a
- *  fixed sum over fixed years. The full draw is chargeable; reliefs and other
- *  income shift the year's chargeable income, so the tax-free draw/yr =
- *  20k - (other income - reliefs). */
+ *  fixed sum over fixed years. Only 50% of a draw is taxable at withdrawal age;
+ *  reliefs and other income shift the chargeable income, so the tax-free draw/yr
+ *  = (20k - (other income - reliefs)) / 0.5. */
 function computeOptimal(sum: number, income: number, reliefs: number): Optimal {
   const evenDraw = sum / SPREAD_YEARS;
   const adj = income - reliefs;                       // adjusted other chargeable income
-  const taxFreePerYear = Math.max(0, ZERO_TAX_BAND - adj);
+  // only TAXABLE_FRACTION of a draw counts, so the tax-free draw is grossed up
+  const taxFreePerYear = Math.max(0, ZERO_TAX_BAND - adj) / TAXABLE_FRACTION;
   const baseTax = incomeTax(adj);                     // incomeTax floors at 0 for adj<=0
   const yearTax = Math.max(0, incomeTax(adj + evenDraw * TAXABLE_FRACTION) - baseTax);
   const taxFreeCapacity = taxFreePerYear * SPREAD_YEARS;
@@ -67,8 +68,8 @@ function computeOptimal(sum: number, income: number, reliefs: number): Optimal {
   };
 }
 
-/** Client-side SRS withdrawal cost. Full withdrawal is taxable each year
- *  (IRAS brackets); premature adds a 5% penalty on the lump. */
+/** Client-side SRS withdrawal cost. A spread (at-retirement) draw is 50%
+ *  taxable each year; a premature draw is 100% taxable + a 5% penalty. */
 function computeWithdrawal(balance: number, income: number, reliefs: number): SrsWithdrawal {
   const adj = income - reliefs;
   const baseTax = incomeTax(adj);
@@ -149,7 +150,6 @@ function Leg({ title, leg, best }: { title: string; leg: SrsWithdrawalLeg; best:
 
 export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { suggestedBalance?: number; suggestedAltBalance?: number } = {}) {
   const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 0);
-  const [income, setIncome] = useState(0);
   const [reliefs, setReliefs] = useState(0);
   const [altBalance, setAltBalance] = useState(suggestedAltBalance && suggestedAltBalance > 0 ? Math.round(suggestedAltBalance) : 0);
   const [source, setSource] = useState<"srs" | "alt">("srs");
@@ -162,13 +162,13 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
   const sumFor = (s: "srs" | "alt") => (s === "srs" ? balance : altBalance);
 
   function compute() {
-    setResult(computeWithdrawal(balance, income, reliefs));
-    setOptimal(computeOptimal(sumFor(source), income, reliefs));
+    setResult(computeWithdrawal(balance, 0, reliefs));
+    setOptimal(computeOptimal(sumFor(source), 0, reliefs));
   }
 
   function changeSource(s: "srs" | "alt") {
     setSource(s);
-    if (optimal) setOptimal(computeOptimal(sumFor(s), income, reliefs));
+    if (optimal) setOptimal(computeOptimal(sumFor(s), 0, reliefs));
   }
 
   const spreadBest = result ? result.spread_10y.total_cost <= result.premature.total_cost : false;
@@ -178,9 +178,9 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
       <div>
         <h3 className="font-semibold">SRS Withdrawal — Spread vs Premature</h3>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
-          Spreading over 10 years keeps each year&apos;s taxable income in low
-          brackets; a premature cash-out is taxed as one lump plus a 5% penalty.
-          Compare the lifetime cost.
+          At withdrawal age only 50% of each spread draw is taxable, kept in low
+          brackets; a premature cash-out is 100% taxable as one lump plus a 5%
+          penalty. Compare the lifetime cost.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -232,19 +232,7 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
           </p>
         </div>
         <div>
-          <label htmlFor="srs-other-inc" className="mb-1 block text-xs font-medium">
-            Other income / withdrawal year (S$)
-          </label>
-          <input
-            id="srs-other-inc"
-            type="number"
-            min={0}
-            value={income}
-            onChange={(e) => setIncome(Math.max(0, Number(e.target.value)))}
-            className={inputCls}
-            aria-label="Other chargeable income per withdrawal year"
-          />
-          <label htmlFor="srs-reliefs" className="mt-3 mb-1 block text-xs font-medium">
+          <label htmlFor="srs-reliefs" className="mb-1 block text-xs font-medium">
             Reliefs / deductions / year (S$)
           </label>
           <input
@@ -286,8 +274,9 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
           <h4 className="text-sm font-semibold">Tax Hack for 10 Years Withdrawal</h4>
           <p className="mt-1 text-xs text-[var(--color-muted)]">
             Income tax is progressive, so equal yearly draws minimise total tax.
-            The full draw is chargeable; the first {sgd(ZERO_TAX_BAND)} of
-            chargeable income each year is tax-free (IRAS resident rates).
+            Only 50% of each withdrawal is taxable at withdrawal age, and the first
+            {" "}{sgd(ZERO_TAX_BAND)} of chargeable income each year is tax-free
+            (IRAS resident rates).
           </p>
 
           {/* choose which pot to draw down */}
