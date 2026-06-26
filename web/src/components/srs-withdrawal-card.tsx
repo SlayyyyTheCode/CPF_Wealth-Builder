@@ -161,6 +161,10 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
 
   const sumFor = (s: "srs" | "alt") => (s === "srs" ? balance : altBalance);
 
+  // Largest pot that is 100% tax-free when spread over 10 years (no other
+  // income; reliefs widen the band). Default with reliefs 0 = $400,000.
+  const taxFreeCapacityHint = ((ZERO_TAX_BAND + reliefs) / TAXABLE_FRACTION) * SPREAD_YEARS;
+
   function compute() {
     setResult(computeWithdrawal(balance, 0, reliefs));
     setOptimal(computeOptimal(sumFor(source), 0, reliefs));
@@ -181,6 +185,10 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
           At withdrawal age only 50% of each spread draw is taxable, kept in low
           brackets; a premature cash-out is 100% taxable as one lump plus a 5%
           penalty. Compare the lifetime cost.
+        </p>
+        <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+          💡 Up to {sgd(taxFreeCapacityHint)} spread evenly over 10 years
+          ({sgd(taxFreeCapacityHint / SPREAD_YEARS)}/year) is 100% tax-free.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
