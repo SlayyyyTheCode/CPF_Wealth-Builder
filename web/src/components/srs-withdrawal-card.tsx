@@ -48,12 +48,14 @@ function Leg({ title, leg, best }: { title: string; leg: SrsWithdrawalLeg; best:
   );
 }
 
-export function SrsWithdrawalCard() {
-  const [balance, setBalance] = useState(200000);
+export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: number } = {}) {
+  const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 200000);
   const [income, setIncome] = useState(0);
   const [result, setResult] = useState<SrsWithdrawal | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const suggested = suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : null;
 
   async function compute() {
     setErr(null);
@@ -92,6 +94,15 @@ export function SrsWithdrawalCard() {
             className={inputCls}
             aria-label="SRS balance at retirement"
           />
+          {suggested !== null && suggested !== balance && (
+            <button
+              type="button"
+              onClick={() => setBalance(suggested)}
+              className="mt-1 text-xs font-medium text-[var(--color-primary)] hover:underline"
+            >
+              Use projected balance ({sgd(suggested)})
+            </button>
+          )}
         </div>
         <div>
           <label htmlFor="srs-other-inc" className="mb-1 block text-xs font-medium">

@@ -1,12 +1,16 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { sgd } from "@/lib/format";
+import type { Residency } from "@/lib/types";
 
 const inputCls =
   "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]";
 const labelCls = "mb-1 block text-xs font-medium";
 const cardCls =
   "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)] flex flex-col gap-4";
+
+const SRS_CAP: Record<Residency, number> = { citizen: 15300, pr: 15300, foreigner: 35700 };
 
 type Freq = "monthly" | "yearly";
 
@@ -20,7 +24,15 @@ function futureValue(initial: number, annualContribution: number, ratePct: numbe
   return initial * growth + annualContribution * ((growth - 1) / r);
 }
 
-export function SrsUserPanel({ currentAge }: { currentAge: number | null }) {
+export function SrsUserPanel({
+  currentAge,
+  residency,
+  onProjectedBalance,
+}: {
+  currentAge: number | null;
+  residency: Residency;
+  onProjectedBalance?: (n: number) => void;
+}) {
   const [withdrawalAge, setWithdrawalAge] = useState(63);
   const [initialAmount, setInitialAmount] = useState(0);
   const [contribution, setContribution] = useState(0);
@@ -29,6 +41,8 @@ export function SrsUserPanel({ currentAge }: { currentAge: number | null }) {
   const [altName, setAltName] = useState("Alternative investment");
   const [altInterest, setAltInterest] = useState(4);
 
+  const cap = SRS_CAP[residency];
+
   const proj = useMemo(() => {
     const age = currentAge ?? 0;
     const years = Math.max(withdrawalAge - age, 0);
@@ -36,14 +50,21 @@ export function SrsUserPanel({ currentAge }: { currentAge: number | null }) {
     const totalContributed = initialAmount + annualContribution * years;
     const srsBalance = futureValue(initialAmount, annualContribution, srsInterest, years);
     const altBalance = futureValue(initialAmount, annualContribution, altInterest, years);
-    return {
-      years,
-      totalContributed,
-      srsBalance,
-      altBalance,
-      delta: altBalance - srsBalance,
-    };
+    // per-year series for the growth chart (age on the x-axis)
+    const series = Array.from({ length: years + 1 }, (_, i) => ({
+      age: age + i,
+      srs: Math.round(futureValue(initialAmount, annualContribution, srsInterest, i)),
+      alt: Math.round(futureValue(initialAmount, annualContribution, altInterest, i)),
+    }));
+    return { years, annualContribution, totalContributed, srsBalance, altBalance, series, delta: altBalance - srsBalance };
   }, [currentAge, withdrawalAge, initialAmount, contribution, freq, srsInterest, altInterest]);
+
+  // feed the projected SRS balance up to the page (→ withdrawal card prefill)
+  useEffect(() => {
+    onProjectedBalance?.(proj.srsBalance);
+  }, [proj.srsBalance, onProjectedBalance]);
+
+  const overCap = proj.annualContribution > cap;
 
   return (
     <div className={cardCls}>
@@ -112,6 +133,13 @@ export function SrsUserPanel({ currentAge }: { currentAge: number | null }) {
         </div>
       </div>
 
+      {/* contribution cap awareness */}
+      {overCap && (
+        <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-[var(--color-error)] dark:bg-red-900/20">
+          ⚠ Yearly contribution {sgd(proj.annualContribution)} exceeds the {residency === "foreigner" ? "foreigner" : "citizen/PR"} SRS cap of {sgd(cap)}. Contributions above the cap are not allowed and earn no tax relief.
+        </p>
+      )}
+
       {/* projection output */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-[var(--color-border)] p-3">
@@ -129,6 +157,22 @@ export function SrsUserPanel({ currentAge }: { currentAge: number | null }) {
           <p className="text-xs text-[var(--color-muted)]">balance at age {withdrawalAge}</p>
         </div>
       </div>
+
+      {/* growth chart */}
+      {proj.series.length > 1 && (
+        <div className="h-64" role="img" aria-label="Line chart comparing SRS cash growth against the alternative investment by age">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={proj.series} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
+              <XAxis dataKey="age" tick={{ fontSize: 12 }} />
+              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} width={44} />
+              <Tooltip formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)} />
+              <Legend />
+              <Line isAnimationActive={false} type="monotone" dataKey="srs" name={`SRS cash (${srsInterest}%)`} stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+              <Line isAnimationActive={false} type="monotone" dataKey="alt" name={`${altName || "Alternative"} (${altInterest}%)`} stroke="var(--chart-2)" strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <div className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm">
         <div className="flex justify-between py-0.5">
