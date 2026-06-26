@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { taxEstimate, taxReliefCalc } from "@/lib/api";
 import { sgd } from "@/lib/format";
-import type { TaxEstimate, TaxRelief } from "@/lib/types";
+import type { TaxEstimate, TaxRelief, Residency } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
 /* Shared input style                                                   */
@@ -47,24 +47,37 @@ function computeIncomeTax(income: number): { tax: number; marginal: number } {
 /* ------------------------------------------------------------------ */
 /* Card 1 — SRS                                                         */
 /* ------------------------------------------------------------------ */
+const SRS_CAP: Record<Residency, number> = {
+  citizen: 15300,
+  pr: 15300,
+  foreigner: 35700,
+};
+const PERSONAL_RELIEF_CAP = 80000;
+
 function SrsCard({
   income,
   amount,
   setAmount,
+  residency,
+  setResidency,
 }: {
   income: number;
   amount: number;
   setAmount: (n: number) => void;
+  residency: Residency;
+  setResidency: (r: Residency) => void;
 }) {
-  const [result, setResult] = useState<TaxEstimate | null>(null);
+  const [result, setResult] = useState<TaxRelief | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const cap = SRS_CAP[residency];
 
   async function estimate() {
     setErr(null);
     setLoading(true);
     try {
-      const r = await taxEstimate(income, amount);
+      const r = await taxReliefCalc({ income, srs_contribution: amount, residency });
       setResult(r);
     } catch (e) {
       setErr((e as Error).message);
@@ -78,21 +91,40 @@ function SrsCard({
       <div>
         <h3 className="font-semibold">Top up your SRS account</h3>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
-          Contribute to Supplementary Retirement Scheme. Cap S$15,300/yr
-          (citizen/PR). Dollar-for-dollar tax deduction.
+          Contribute to Supplementary Retirement Scheme. Cap S${cap.toLocaleString()}/yr
+          ({residency === "foreigner" ? "foreigner" : "citizen/PR"}). Dollar-for-dollar
+          tax relief.
         </p>
       </div>
       <div className="space-y-2">
+        <label htmlFor="srs-residency" className="text-xs font-medium">
+          Residency
+        </label>
+        <select
+          id="srs-residency"
+          value={residency}
+          onChange={(e) => {
+            const r = e.target.value as Residency;
+            setResidency(r);
+            setAmount(Math.min(SRS_CAP[r], amount));
+          }}
+          className={inputCls}
+          aria-label="Residency status"
+        >
+          <option value="citizen">Citizen</option>
+          <option value="pr">PR</option>
+          <option value="foreigner">Foreigner</option>
+        </select>
         <label htmlFor="srs-amount" className="text-xs font-medium">
-          SRS amount (max S$15,300)
+          SRS amount (max S${cap.toLocaleString()})
         </label>
         <input
           id="srs-amount"
           type="number"
           min={0}
-          max={15300}
+          max={cap}
           value={amount}
-          onChange={(e) => setAmount(Math.min(15300, Math.max(0, Number(e.target.value))))}
+          onChange={(e) => setAmount(Math.min(cap, Math.max(0, Number(e.target.value))))}
           className={inputCls}
           aria-label="SRS top-up amount"
         />
@@ -101,12 +133,27 @@ function SrsCard({
         </button>
       </div>
       {result && (
-        <p role="status" className="text-sm font-medium text-[var(--color-primary)]">
-          Est. tax saved: {sgd(result.estimated_tax_saved)}{" "}
-          <span className="text-xs text-[var(--color-muted)] font-normal">
-            (marginal rate {(result.marginal_rate * 100).toFixed(1)}%)
-          </span>
-        </p>
+        <div role="status" className="space-y-0.5">
+          <p className="text-sm font-medium text-[var(--color-primary)]">
+            Est. tax saved: {sgd(result.estimated_tax_saved)}{" "}
+            <span className="text-xs text-[var(--color-muted)] font-normal">
+              (marginal rate {(result.marginal_rate * 100).toFixed(1)}%)
+            </span>
+          </p>
+          <p className="text-xs text-[var(--color-muted)]">
+            SRS relief: {sgd(result.srs_relief)} · Remaining cap:{" "}
+            {sgd(result.srs_remaining_cap)}
+          </p>
+          <p className="text-xs text-[var(--color-muted)]">
+            Total relief: {sgd(result.total_relief)} / {sgd(PERSONAL_RELIEF_CAP)} ceiling
+          </p>
+          {result.personal_cap_hit && (
+            <p role="alert" className="text-xs font-medium text-[var(--color-error)]">
+              ⚠ Total reliefs hit the S$80,000 personal income-tax ceiling — extra
+              relief is capped.
+            </p>
+          )}
+        </div>
       )}
       {err && (
         <p role="alert" className="text-sm text-[var(--color-error)]">
@@ -435,6 +482,7 @@ function TaxAfterDeductionCard({
 export function TaxMethods() {
   const [income, setIncome] = useState(100000);
   const [srs, setSrs] = useState(15300);
+  const [residency, setResidency] = useState<Residency>("citizen");
   const [rstu, setRstu] = useState(8000);
   const [charity, setCharity] = useState(1000);
   const [parent, setParent] = useState(9000);
@@ -486,7 +534,7 @@ export function TaxMethods() {
 
       {/* card grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SrsCard income={income} amount={srs} setAmount={setSrs} />
+        <SrsCard income={income} amount={srs} setAmount={setSrs} residency={residency} setResidency={setResidency} />
         <CpfTopupCard income={income} amount={rstu} setAmount={setRstu} />
         <AmountTaxCard
           uid="charity"

@@ -17,6 +17,7 @@ class PolicySnapshotBase(BaseModel):
     interest_rates: dict
     income_tax_brackets: list | None = None
     rstu_caps: dict | None = None
+    srs: dict | None = None
     medishield_premiums: list | None = None
     assumptions: dict | None = None
 

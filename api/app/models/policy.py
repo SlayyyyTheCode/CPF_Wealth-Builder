@@ -29,5 +29,6 @@ class PolicySnapshot(Base):
     interest_rates: Mapped[dict] = mapped_column(JSON)
     income_tax_brackets: Mapped[list | None] = mapped_column(JSON, nullable=True)
     rstu_caps: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    srs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     medishield_premiums: Mapped[list | None] = mapped_column(JSON, nullable=True)
     assumptions: Mapped[dict | None] = mapped_column(JSON, nullable=True)

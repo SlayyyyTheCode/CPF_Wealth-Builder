@@ -114,12 +114,18 @@ def tax_relief(req: TaxReliefRequest, db: Session = Depends(get_db)):
     r = compute_relief(
         Decimal(str(req.income)), Decimal(str(req.rstu_self)),
         Decimal(str(req.rstu_family)), Decimal(str(req.voluntary_cpf)), policy,
+        srs_contribution=Decimal(str(req.srs_contribution)),
+        residency=req.residency,
     )
     return {
         "relief_earned": float(r["relief_earned"]),
         "remaining_cap": float(r["remaining_cap"]),
         "estimated_tax_saved": float(r["estimated_tax_saved"]),
         "marginal_rate": r["marginal_rate"],
+        "srs_relief": float(r["srs_relief"]),
+        "srs_remaining_cap": float(r["srs_remaining_cap"]),
+        "total_relief": float(r["total_relief"]),
+        "personal_cap_hit": r["personal_cap_hit"],
     }
 
 

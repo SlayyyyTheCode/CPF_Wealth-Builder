@@ -66,7 +66,8 @@ export interface IngestResult { extracted: PolicyCore; diff: DiffRow[]; carried_
 export interface SnapshotListItem { id: number; effective_year: number; status: string; created_at: string; approved_at: string | null; }
 export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?: number; employment_status?: string; balances?: Balances; special_access?: boolean; housing_data?: HousingData | null; password?: string; salary_increment_pct?: number; bonus_months?: number; }
 export interface TaxEstimate { estimated_tax_saved: number; marginal_rate: number; }
-export interface TaxRelief { relief_earned: number; remaining_cap: number; estimated_tax_saved: number; marginal_rate: number; }
+export type Residency = "citizen" | "pr" | "foreigner";
+export interface TaxRelief { relief_earned: number; remaining_cap: number; estimated_tax_saved: number; marginal_rate: number; srs_relief: number; srs_remaining_cap: number; total_relief: number; personal_cap_hit: boolean; }
 export interface Assumptions {
   readiness: { w_sum: number; w_ma: number; on_track: number; below_frs_pace: number };
   growth: { sum_rate: number; bhs_rate: number };

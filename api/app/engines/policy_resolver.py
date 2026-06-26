@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.policy import PolicySnapshot
-from app.policy.tax_brackets import INCOME_TAX_2026, RSTU_CAPS_2026
+from app.policy.tax_brackets import INCOME_TAX_2026, RSTU_CAPS_2026, SRS_2026
 from app.policy.medishield import MEDISHIELD_PREMIUMS_2026
 from app.policy.assumptions import ASSUMPTIONS_2026
 
@@ -27,6 +27,7 @@ def snapshot_to_policy(snap: PolicySnapshot) -> dict:
         "interest_rates": snap.interest_rates,
         "income_tax_brackets": snap.income_tax_brackets or INCOME_TAX_2026,
         "rstu_caps": snap.rstu_caps or RSTU_CAPS_2026,
+        "srs": getattr(snap, "srs", None) or SRS_2026,
         "medishield_premiums": snap.medishield_premiums or MEDISHIELD_PREMIUMS_2026,
         "assumptions": snap.assumptions or ASSUMPTIONS_2026,
     }

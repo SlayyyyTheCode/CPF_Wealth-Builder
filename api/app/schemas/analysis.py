@@ -23,6 +23,8 @@ class TaxReliefRequest(BaseModel):
     rstu_self: float = 0
     rstu_family: float = 0
     voluntary_cpf: float = 0
+    srs_contribution: float = 0
+    residency: str = "citizen"  # citizen | pr | foreigner
 
 
 class TaxEstimateRequest(BaseModel):

@@ -20,3 +20,16 @@ INCOME_TAX_2026 = [
 ]
 
 RSTU_CAPS_2026 = {"self": 8000, "family": 8000, "combined": 16000}
+
+# Supplementary Retirement Scheme. Foreigners get the higher $35,700 cap
+# *because* they receive no CPF (and thus no CPF relief) — this asymmetry is
+# intentional policy, not a bug. Do not "normalise" the two caps.
+SRS_2026 = {
+    "cap_citizen_pr": 15300,
+    "cap_foreigner": 35700,
+    "personal_relief_cap": 80000,   # YA2026+ ceiling on total personal reliefs
+    "taxable_fraction": 0.5,        # fraction of each SRS withdrawal that is taxable
+    "premature_penalty": 0.05,      # 5% penalty on withdrawals before retirement age
+    "withdrawal_years": 10,         # tax-free spread window from first withdrawal
+    "statutory_retirement_age": 63,
+}

@@ -1,5 +1,5 @@
 from app.policy.rates import CONTRIBUTION_2026, ALLOCATION_2026
-from app.policy.tax_brackets import INCOME_TAX_2026, RSTU_CAPS_2026
+from app.policy.tax_brackets import INCOME_TAX_2026, RSTU_CAPS_2026, SRS_2026
 from app.policy.medishield import MEDISHIELD_PREMIUMS_2026
 from app.policy.assumptions import ASSUMPTIONS_2026
 
@@ -26,6 +26,7 @@ SEED_2026 = {
     "interest_rates": INTEREST_2026,
     "income_tax_brackets": INCOME_TAX_2026,
     "rstu_caps": RSTU_CAPS_2026,
+    "srs": SRS_2026,
     "medishield_premiums": MEDISHIELD_PREMIUMS_2026,
     "assumptions": ASSUMPTIONS_2026,
 }
