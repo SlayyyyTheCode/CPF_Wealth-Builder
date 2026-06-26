@@ -5,7 +5,6 @@ import type { Analysis, Residency } from "@/lib/types";
 import { ScenarioCards } from "@/components/scenario-cards";
 import { StrategyList } from "@/components/strategy-list";
 import { TaxMethods } from "@/components/tax-methods";
-import { SrsWithdrawalCard } from "@/components/srs-withdrawal-card";
 import { PageHeading, OptimiseIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 
@@ -73,11 +72,6 @@ export default function OptimisationPage({
       </section>
 
       <TaxMethods initialResidency={residency} />
-
-      <section aria-label="SRS withdrawal" className="mt-8">
-        <h2 className="mb-3 text-base font-semibold">SRS withdrawal strategy</h2>
-        <SrsWithdrawalCard />
-      </section>
     </>
   );
 }
