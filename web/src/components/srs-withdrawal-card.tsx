@@ -9,6 +9,36 @@ import type { SrsWithdrawal, SrsWithdrawalLeg } from "@/lib/types";
 const TAXABLE_FRACTION = 0.5;
 const PREMATURE_PENALTY = 0.05;
 const SPREAD_YEARS = 10;
+const ZERO_TAX_BAND = 20000; // first $20k of chargeable income is taxed at 0%
+
+interface Optimal {
+  evenDraw: number;          // recommended equal yearly withdrawal (balance/10)
+  taxFreePerYear: number;    // max SRS draw/yr that stays untaxed, given other income
+  taxFreeCapacity: number;   // tax-free draw over the full 10-year window
+  totalTax: number;          // total tax under the even-spread plan
+  fullyTaxFree: boolean;
+  excessPerYear: number;     // taxable-bracket portion above the tax-free draw
+}
+
+/** Lowest-tax 10-year spread. Income tax is convex, so equal yearly draws
+ *  (balance/10) minimize total tax. The lever is keeping each year's taxable
+ *  half within the $20k zero-rate band: tax-free draw/yr = 2 x (20k - other
+ *  income). Anything above that is taxed. */
+function computeOptimal(balance: number, income: number): Optimal {
+  const evenDraw = balance / SPREAD_YEARS;
+  const taxFreeTaxable = Math.max(0, ZERO_TAX_BAND - income);
+  const taxFreePerYear = taxFreeTaxable / TAXABLE_FRACTION; // /0.5 == x2
+  const taxablePerYear = evenDraw * TAXABLE_FRACTION;
+  const yearTax = incomeTax(income + taxablePerYear) - incomeTax(income);
+  return {
+    evenDraw,
+    taxFreePerYear,
+    taxFreeCapacity: taxFreePerYear * SPREAD_YEARS,
+    totalTax: yearTax * SPREAD_YEARS,
+    fullyTaxFree: evenDraw <= taxFreePerYear + 0.01,
+    excessPerYear: Math.max(0, evenDraw - taxFreePerYear),
+  };
+}
 
 /** Client-side mirror of the backend SRS withdrawal engine. */
 function computeWithdrawal(balance: number, income: number): SrsWithdrawal {
@@ -92,11 +122,13 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
   const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 0);
   const [income, setIncome] = useState(0);
   const [result, setResult] = useState<SrsWithdrawal | null>(null);
+  const [optimal, setOptimal] = useState<Optimal | null>(null);
 
   const suggested = suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : null;
 
   function compute() {
     setResult(computeWithdrawal(balance, income));
+    setOptimal(computeOptimal(balance, income));
   }
 
   const spreadBest = result ? result.spread_10y.total_cost <= result.premature.total_cost : false;
@@ -104,7 +136,7 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)] flex flex-col gap-3">
       <div>
-        <h3 className="font-semibold">SRS withdrawal — spread vs premature</h3>
+        <h3 className="font-semibold">SRS Withdrawal — Spread vs Premature</h3>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Spreading over 10 years taxes only 50% of each draw; a premature cash-out
           is 100% taxable plus a 5% penalty. Compare the lifetime cost.
@@ -165,6 +197,40 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
               {sgd(result.premature_extra_cost)}
             </span>{" "}
             more over the lifetime.
+          </p>
+        </div>
+      )}
+
+      {optimal && (
+        <div className="rounded-xl border border-[var(--color-primary)] bg-[var(--color-surface-raised)] p-4">
+          <h4 className="text-sm font-semibold">Lowest-tax 10-year plan</h4>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            Income tax is progressive, so equal yearly draws minimise total tax.
+            Each year only 50% of the draw is taxable; the first {sgd(ZERO_TAX_BAND)} of
+            chargeable income is tax-free.
+          </p>
+          <dl className="mt-3 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-[var(--color-muted)]">Withdraw each year (×10)</dt>
+              <dd className="tabular-nums font-semibold">{sgd(optimal.evenDraw)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[var(--color-muted)]">Tax-free draw / year</dt>
+              <dd className="tabular-nums">{sgd(optimal.taxFreePerYear)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[var(--color-muted)]">Tax-free over 10 years</dt>
+              <dd className="tabular-nums">{sgd(optimal.taxFreeCapacity)}</dd>
+            </div>
+            <div className="flex justify-between border-t border-[var(--color-border)] pt-1 font-medium">
+              <dt>Total tax (optimal)</dt>
+              <dd className="tabular-nums text-[var(--color-primary)]">{sgd(optimal.totalTax)}</dd>
+            </div>
+          </dl>
+          <p className={`mt-2 text-sm font-medium ${optimal.fullyTaxFree ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-fg)]"}`}>
+            {optimal.fullyTaxFree
+              ? `✓ Spreading ${sgd(optimal.evenDraw)}/year keeps every dollar tax-free.`
+              : `Keep withdrawals to ${sgd(optimal.taxFreePerYear)}/year to stay tax-free; ${sgd(optimal.excessPerYear)}/year above that is taxed. To pay zero tax you'd need ~${Math.ceil((optimal.evenDraw * SPREAD_YEARS) / Math.max(optimal.taxFreePerYear, 1))} years — but SRS allows only 10, so some tax is unavoidable at this balance.`}
           </p>
         </div>
       )}

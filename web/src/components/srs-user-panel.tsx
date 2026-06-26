@@ -37,14 +37,16 @@ function futureValue(initial: number, annualContribution: number, ratePct: numbe
 }
 
 export function SrsUserPanel({
-  currentAge,
+  initialAge,
   residency,
   onProjectedBalance,
 }: {
-  currentAge: number | null;
+  initialAge: number | null;
   residency: Residency;
   onProjectedBalance?: (n: number) => void;
 }) {
+  const [age, setAge] = useState(35);
+  const [ageTouched, setAgeTouched] = useState(false);
   const [withdrawalAge, setWithdrawalAge] = useState(63);
   const [initialAmount, setInitialAmount] = useState(0);
   const [contribution, setContribution] = useState(0);
@@ -55,9 +57,11 @@ export function SrsUserPanel({
 
   const cap = SRS_CAP[residency];
 
+  // Show the member's age until the user overrides it (no effect needed).
+  const effectiveAge = ageTouched ? age : (initialAge ?? age);
+
   const proj = useMemo(() => {
-    const age = currentAge ?? 0;
-    const years = Math.max(withdrawalAge - age, 0);
+    const years = Math.max(withdrawalAge - effectiveAge, 0);
     const annualContribution = freq === "monthly" ? contribution * 12 : contribution;
     const totalContributed = initialAmount + annualContribution * years;
     const srsBalance = futureValue(initialAmount, annualContribution, srsInterest, years);
@@ -69,7 +73,7 @@ export function SrsUserPanel({
       alt: Math.round(futureValue(initialAmount, annualContribution, altInterest, i)),
     }));
     return { years, annualContribution, totalContributed, srsBalance, altBalance, series, delta: altBalance - srsBalance };
-  }, [currentAge, withdrawalAge, initialAmount, contribution, freq, srsInterest, altInterest]);
+  }, [effectiveAge, age, withdrawalAge, initialAmount, contribution, freq, srsInterest, altInterest]);
 
   // feed the projected SRS balance up to the page (→ withdrawal card prefill)
   useEffect(() => {
@@ -90,15 +94,21 @@ export function SrsUserPanel({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
+          <label htmlFor="cur-age" className={labelCls}>Current age</label>
+          <input id="cur-age" type="number" min={0} max={120} value={effectiveAge}
+            onChange={(e) => { setAgeTouched(true); setAge(Math.max(0, Number(e.target.value))); }}
+            className={inputCls} aria-label="Current age" />
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            {initialAge !== null && !ageTouched ? "From client profile — editable" : " "}
+          </p>
+        </div>
+
+        <div>
           <label htmlFor="wd-age" className={labelCls}>Withdrawal age</label>
           <input id="wd-age" type="number" min={0} max={120} value={withdrawalAge}
             onChange={(e) => setWithdrawalAge(Math.max(0, Number(e.target.value)))}
             className={inputCls} aria-label="Withdrawal age" />
-          <p className="mt-1 text-xs text-[var(--color-muted)]">
-            {currentAge !== null
-              ? `Current age ${currentAge} · ${proj.years} years to grow`
-              : "Current age unknown"}
-          </p>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">{proj.years} years to grow</p>
         </div>
 
         <div>

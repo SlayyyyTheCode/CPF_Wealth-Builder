@@ -43,7 +43,7 @@ export default function SrsPage({
 
       <section aria-label="SRS projection" className="mb-8">
         <SrsUserPanel
-          currentAge={currentAge}
+          initialAge={currentAge}
           residency={residency}
           onProjectedBalance={handleProjected}
         />
