@@ -1,7 +1,7 @@
 "use client";
 import { use, useCallback, useEffect, useState } from "react";
 import { getMember, updateMember } from "@/lib/api";
-import type { Member, MemberUpdate } from "@/lib/types";
+import type { Member, MemberUpdate, Residency } from "@/lib/types";
 import { dobMMYYYY, ageFromDob } from "@/lib/format";
 import { PageHeading, SettingsIcon } from "@/components/icons";
 import { AdminBar } from "@/components/admin-bar";
@@ -19,6 +19,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const [name, setName] = useState("");
   const [wage, setWage] = useState("");
   const [empStatus, setEmpStatus] = useState("employee");
+  const [residency, setResidency] = useState<Residency>("citizen");
   const [oa, setOa] = useState("");
   const [sa, setSa] = useState("");
   const [ma, setMa] = useState("");
@@ -43,6 +44,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
         setName(m.name);
         setWage(String(m.monthly_gross_wage));
         setEmpStatus(m.employment_status);
+        setResidency(m.residency ?? "citizen");
         setOa(String(m.balances.OA));
         setSa(String(m.balances.SA));
         setMa(String(m.balances.MA));
@@ -79,6 +81,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
       name,
       monthly_gross_wage: Number(wage),
       employment_status: empStatus,
+      residency,
       balances: {
         OA: Number(oa),
         SA: Number(sa),
@@ -201,6 +204,23 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                 <option value="employee">Employee</option>
                 <option value="self-employed">Self-employed</option>
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="residency" className={labelCls}>Tax residency</label>
+              <select
+                id="residency"
+                className={inputCls}
+                value={residency}
+                onChange={(e) => setResidency(e.target.value as Residency)}
+              >
+                <option value="citizen">Citizen</option>
+                <option value="pr">PR</option>
+                <option value="foreigner">Foreigner</option>
+              </select>
+              <p className="mt-1 text-xs text-[var(--color-muted)]">
+                Sets the SRS cap in Optimisation (S$15,300 citizen/PR · S$35,700 foreigner).
+              </p>
             </div>
 
             <div>

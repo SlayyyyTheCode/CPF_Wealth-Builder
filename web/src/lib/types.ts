@@ -13,7 +13,7 @@ export interface Balances { OA: number; SA: number; MA: number; RA: number; }
 export interface HousingData { monthly_mortgage?: number }
 export interface Member {
   id: number; name: string; dob: string; monthly_gross_wage: number;
-  employment_status: string; balances: Balances; special_access?: boolean;
+  employment_status: string; residency?: Residency; balances: Balances; special_access?: boolean;
   housing_data?: HousingData | null; has_password?: boolean;
   salary_increment_pct?: number; bonus_months?: number;
 }
@@ -64,7 +64,7 @@ export interface PolicyCore {
 export interface DiffRow { field: string; current: number | null; extracted: number | null; changed: boolean; }
 export interface IngestResult { extracted: PolicyCore; diff: DiffRow[]; carried_forward: Record<string, unknown>; }
 export interface SnapshotListItem { id: number; effective_year: number; status: string; created_at: string; approved_at: string | null; }
-export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?: number; employment_status?: string; balances?: Balances; special_access?: boolean; housing_data?: HousingData | null; password?: string; salary_increment_pct?: number; bonus_months?: number; }
+export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?: number; employment_status?: string; residency?: Residency; balances?: Balances; special_access?: boolean; housing_data?: HousingData | null; password?: string; salary_increment_pct?: number; bonus_months?: number; }
 export interface TaxEstimate { estimated_tax_saved: number; marginal_rate: number; }
 export type Residency = "citizen" | "pr" | "foreigner";
 export interface TaxRelief { relief_earned: number; remaining_cap: number; estimated_tax_saved: number; marginal_rate: number; srs_relief: number; srs_remaining_cap: number; total_relief: number; personal_cap_hit: boolean; }

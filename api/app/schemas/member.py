@@ -15,6 +15,7 @@ class MemberCreate(BaseModel):
     dob: date
     monthly_gross_wage: float
     employment_status: str = "employee"
+    residency: str = "citizen"  # citizen | pr | foreigner
     balances: Balances = Balances()
     housing_data: dict | None = None
     voluntary_top_ups: list | None = None
@@ -31,6 +32,7 @@ class MemberOut(BaseModel):
     dob: date
     monthly_gross_wage: float
     employment_status: str = "employee"
+    residency: str = "citizen"
     balances: Balances = Balances()
     housing_data: dict | None = None
     voluntary_top_ups: list | None = None
@@ -45,6 +47,7 @@ class MemberUpdate(BaseModel):
     dob: date | None = None
     monthly_gross_wage: float | None = None
     employment_status: str | None = None
+    residency: str | None = None
     balances: Balances | None = None
     housing_data: dict | None = None
     special_access: bool | None = None

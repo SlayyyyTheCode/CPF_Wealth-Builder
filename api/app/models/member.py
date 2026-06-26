@@ -14,6 +14,11 @@ class MemberProfile(Base):
     dob: Mapped[date] = mapped_column(Date)
     monthly_gross_wage: Mapped[float] = mapped_column(Numeric(12, 2))
     employment_status: Mapped[str] = mapped_column(String(20), default="employee")
+    # tax residency: citizen | pr | foreigner. Drives the SRS contribution cap
+    # ($15,300 citizen/PR vs $35,700 foreigner).
+    residency: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="citizen", server_default="citizen"
+    )
     balances: Mapped[dict] = mapped_column(JSON)  # {"OA":..,"SA":..,"MA":..,"RA":..}
     housing_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     voluntary_top_ups: Mapped[list | None] = mapped_column(JSON, nullable=True)

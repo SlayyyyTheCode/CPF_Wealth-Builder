@@ -479,10 +479,10 @@ function TaxAfterDeductionCard({
 /* ------------------------------------------------------------------ */
 /* Main export                                                           */
 /* ------------------------------------------------------------------ */
-export function TaxMethods() {
+export function TaxMethods({ initialResidency = "citizen" }: { initialResidency?: Residency } = {}) {
   const [income, setIncome] = useState(100000);
   const [srs, setSrs] = useState(15300);
-  const [residency, setResidency] = useState<Residency>("citizen");
+  const [residency, setResidency] = useState<Residency>(initialResidency);
   const [rstu, setRstu] = useState(8000);
   const [charity, setCharity] = useState(1000);
   const [parent, setParent] = useState(9000);

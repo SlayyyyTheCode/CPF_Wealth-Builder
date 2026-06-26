@@ -1,7 +1,7 @@
 "use client";
 import { use, useEffect, useState } from "react";
-import { getAnalysis } from "@/lib/api";
-import type { Analysis } from "@/lib/types";
+import { getAnalysis, getMember } from "@/lib/api";
+import type { Analysis, Residency } from "@/lib/types";
 import { ScenarioCards } from "@/components/scenario-cards";
 import { StrategyList } from "@/components/strategy-list";
 import { TaxMethods } from "@/components/tax-methods";
@@ -16,6 +16,7 @@ export default function OptimisationPage({
 }) {
   const { id } = use(params);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [residency, setResidency] = useState<Residency>("citizen");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,6 +28,9 @@ export default function OptimisationPage({
     })
       .then((a) => ok && setAnalysis(a))
       .catch((e) => ok && setErr((e as Error).message));
+    getMember(Number(id))
+      .then((m) => ok && setResidency(m.residency ?? "citizen"))
+      .catch(() => {});
     return () => {
       ok = false;
     };
@@ -68,7 +72,7 @@ export default function OptimisationPage({
         <StrategyList strategies={analysis.strategies} />
       </section>
 
-      <TaxMethods />
+      <TaxMethods initialResidency={residency} />
 
       <section aria-label="SRS withdrawal" className="mt-8">
         <h2 className="mb-3 text-base font-semibold">SRS withdrawal strategy</h2>
