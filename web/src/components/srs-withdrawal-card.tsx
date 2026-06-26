@@ -4,9 +4,10 @@ import { sgd } from "@/lib/format";
 import { incomeTax } from "@/lib/sg-tax";
 import type { SrsWithdrawal, SrsWithdrawalLeg } from "@/lib/types";
 
-// SRS policy constants (mirror SRS_2026): 50% of a spread draw is taxable,
-// premature is 100% taxable + 5% penalty, spread runs over 10 years.
-const TAXABLE_FRACTION = 0.5;
+// Per product spec, the full withdrawal amount is treated as chargeable income
+// each year (IRAS progressive brackets). NB: Singapore's statutory SRS rule
+// taxes only 50% of a qualifying withdrawal, but this tool models 100% taxable.
+const TAXABLE_FRACTION = 1.0;
 const PREMATURE_PENALTY = 0.05;
 const SPREAD_YEARS = 10;
 const ZERO_TAX_BAND = 20000; // first $20k of chargeable income is taxed at 0%
@@ -35,13 +36,13 @@ interface Optimal {
 }
 
 /** Lowest-tax 10-year spread. Income tax is convex (IRAS resident brackets),
- *  so equal yearly draws minimise total tax. The lever is keeping each year's
- *  taxable half within the $20k zero-rate band: tax-free draw/yr = 2 x (20k -
- *  other income). Anything above is taxed.
+ *  so equal yearly draws minimise total tax. The full draw is chargeable, so
+ *  the tax-free draw/yr = (20k - other income) — the $20k zero-rate band.
+ *  Anything above is taxed.
  *
  *  altBalance is the alternative-investment pot at retirement (from the User
  *  panel). Drawing that larger pot down evenly over 10 years yields more total
- *  cash than the plain SRS balance, taxed only on the 50% taxable half. */
+ *  cash than the plain SRS balance. */
 function computeOptimal(balance: number, income: number, altBalance: number): Optimal {
   const evenDraw = balance / SPREAD_YEARS;
   const taxFreeTaxable = Math.max(0, ZERO_TAX_BAND - income);
@@ -82,7 +83,8 @@ function computeOptimal(balance: number, income: number, altBalance: number): Op
   };
 }
 
-/** Client-side mirror of the backend SRS withdrawal engine. */
+/** Client-side SRS withdrawal cost. Full withdrawal is taxable each year
+ *  (IRAS brackets); premature adds a 5% penalty on the lump. */
 function computeWithdrawal(balance: number, income: number): SrsWithdrawal {
   const baseTax = incomeTax(income);
 
@@ -182,8 +184,9 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
       <div>
         <h3 className="font-semibold">SRS Withdrawal — Spread vs Premature</h3>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
-          Spreading over 10 years taxes only 50% of each draw; a premature cash-out
-          is 100% taxable plus a 5% penalty. Compare the lifetime cost.
+          Spreading over 10 years keeps each year&apos;s taxable income in low
+          brackets; a premature cash-out is taxed as one lump plus a 5% penalty.
+          Compare the lifetime cost.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -274,8 +277,8 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
           <h4 className="text-sm font-semibold">Lowest-tax 10-year plan</h4>
           <p className="mt-1 text-xs text-[var(--color-muted)]">
             Income tax is progressive, so equal yearly draws minimise total tax.
-            Each year only 50% of the draw is taxable; the first {sgd(ZERO_TAX_BAND)} of
-            chargeable income is tax-free.
+            The full draw is chargeable; the first {sgd(ZERO_TAX_BAND)} of
+            chargeable income each year is tax-free (IRAS resident rates).
           </p>
           <dl className="mt-3 space-y-1 text-sm">
             <div className="flex justify-between">
@@ -365,7 +368,7 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
               <span className="font-medium text-emerald-600 dark:text-emerald-400">
                 {sgd(optimal.investedTotal - balance)}
               </span>{" "}
-              larger than the SRS cash balance — taxed only on the 50% taxable half each year.
+              larger than the SRS cash balance — the full draw is taxed each year.
             </p>
           </div>
           <p className={`mt-2 text-sm font-medium ${optimal.fullyTaxFree ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-fg)]"}`}>
