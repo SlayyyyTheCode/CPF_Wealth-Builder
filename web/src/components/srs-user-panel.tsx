@@ -1,8 +1,20 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList } from "recharts";
 import { sgd } from "@/lib/format";
 import type { Residency } from "@/lib/types";
+
+// Label the final point of a line with its dollar value (the "amount").
+function endLabel(lastIndex: number, color: string) {
+  return function Label(props: { x?: number | string; y?: number | string; value?: number | string | boolean | null; index?: number }) {
+    if (props.index !== lastIndex || props.x == null || props.y == null) return <text />;
+    return (
+      <text x={Number(props.x)} y={Number(props.y)} dy={-8} fontSize={11} fontWeight={600} textAnchor="end" fill={color}>
+        {sgd(Number(props.value))}
+      </text>
+    );
+  };
+}
 
 const inputCls =
   "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]";
@@ -167,8 +179,12 @@ export function SrsUserPanel({
               <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} width={44} />
               <Tooltip formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)} />
               <Legend />
-              <Line isAnimationActive={false} type="monotone" dataKey="srs" name={`SRS cash (${srsInterest}%)`} stroke="var(--chart-1)" strokeWidth={2} dot={false} />
-              <Line isAnimationActive={false} type="monotone" dataKey="alt" name={`${altName || "Alternative"} (${altInterest}%)`} stroke="var(--chart-2)" strokeWidth={2.5} dot={false} />
+              <Line isAnimationActive={false} type="monotone" dataKey="srs" name={`SRS cash (${srsInterest}%)`} stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 2 }}>
+                <LabelList dataKey="srs" content={endLabel(proj.series.length - 1, "var(--chart-1)")} />
+              </Line>
+              <Line isAnimationActive={false} type="monotone" dataKey="alt" name={`${altName || "Alternative"} (${altInterest}%)`} stroke="var(--chart-2)" strokeWidth={2.5} dot={{ r: 2 }}>
+                <LabelList dataKey="alt" content={endLabel(proj.series.length - 1, "var(--chart-2)")} />
+              </Line>
             </LineChart>
           </ResponsiveContainer>
         </div>

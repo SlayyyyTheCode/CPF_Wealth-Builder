@@ -1,8 +1,48 @@
 "use client";
 import { useState } from "react";
-import { srsWithdrawal } from "@/lib/api";
 import { sgd } from "@/lib/format";
+import { incomeTax } from "@/lib/sg-tax";
 import type { SrsWithdrawal, SrsWithdrawalLeg } from "@/lib/types";
+
+// SRS policy constants (mirror SRS_2026): 50% of a spread draw is taxable,
+// premature is 100% taxable + 5% penalty, spread runs over 10 years.
+const TAXABLE_FRACTION = 0.5;
+const PREMATURE_PENALTY = 0.05;
+const SPREAD_YEARS = 10;
+
+/** Client-side mirror of the backend SRS withdrawal engine. */
+function computeWithdrawal(balance: number, income: number): SrsWithdrawal {
+  const baseTax = incomeTax(income);
+
+  const spreadDraw = balance / SPREAD_YEARS;
+  const spreadTaxable = spreadDraw * TAXABLE_FRACTION;
+  const spreadYearTax = incomeTax(income + spreadTaxable) - baseTax;
+  const spreadTotal = spreadYearTax * SPREAD_YEARS;
+
+  const premTax = incomeTax(income + balance) - baseTax;
+  const premPenalty = balance * PREMATURE_PENALTY;
+  const premTotal = premTax + premPenalty;
+
+  const leg = (
+    mode: string, years: number, draw: number, taxable: number,
+    yearTax: number, lifetime: number, penalty: number,
+  ): SrsWithdrawalLeg => ({
+    mode,
+    years: Array.from({ length: years }, (_, i) => ({
+      year: i + 1, draw, taxable, tax: yearTax,
+    })),
+    lifetime_tax: lifetime,
+    penalty,
+    total_cost: lifetime + penalty,
+    effective_rate: balance > 0 ? (lifetime + penalty) / balance : 0,
+  });
+
+  return {
+    spread_10y: leg("spread_10y", SPREAD_YEARS, spreadDraw, spreadTaxable, spreadYearTax, spreadTotal, 0),
+    premature: leg("premature", 1, balance, balance, premTax, premTax, premPenalty),
+    premature_extra_cost: premTotal - spreadTotal,
+  };
+}
 
 const inputCls =
   "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]";
@@ -49,24 +89,14 @@ function Leg({ title, leg, best }: { title: string; leg: SrsWithdrawalLeg; best:
 }
 
 export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: number } = {}) {
-  const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 200000);
+  const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 0);
   const [income, setIncome] = useState(0);
   const [result, setResult] = useState<SrsWithdrawal | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const suggested = suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : null;
 
-  async function compute() {
-    setErr(null);
-    setLoading(true);
-    try {
-      setResult(await srsWithdrawal({ balance, annual_income: income }));
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
+  function compute() {
+    setResult(computeWithdrawal(balance, income));
   }
 
   const spreadBest = result ? result.spread_10y.total_cost <= result.premature.total_cost : false;
@@ -119,8 +149,8 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
           />
         </div>
       </div>
-      <button onClick={compute} disabled={loading} className={btnCls}>
-        {loading ? "Computing…" : "Compare"}
+      <button onClick={compute} className={btnCls}>
+        Compare
       </button>
 
       {result && (
@@ -137,11 +167,6 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
             more over the lifetime.
           </p>
         </div>
-      )}
-      {err && (
-        <p role="alert" className="text-sm text-[var(--color-error)]">
-          {err}
-        </p>
       )}
     </div>
   );
