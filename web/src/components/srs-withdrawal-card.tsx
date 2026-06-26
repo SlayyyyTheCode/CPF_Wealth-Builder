@@ -18,18 +18,37 @@ interface Optimal {
   totalTax: number;          // total tax under the even-spread plan
   fullyTaxFree: boolean;
   excessPerYear: number;     // taxable-bracket portion above the tax-free draw
+  // "keep invested during the 10-year drawdown" scenario
+  investedDraw: number;      // level annual withdrawal that exhausts the invested pot
+  investedTotal: number;     // total withdrawn over 10 years (> balance from growth)
+  investedTax: number;       // total tax on the invested drawdown
+  investedNet: number;       // after-tax cash received
 }
 
-/** Lowest-tax 10-year spread. Income tax is convex, so equal yearly draws
- *  (balance/10) minimize total tax. The lever is keeping each year's taxable
- *  half within the $20k zero-rate band: tax-free draw/yr = 2 x (20k - other
- *  income). Anything above that is taxed. */
-function computeOptimal(balance: number, income: number): Optimal {
+/** Lowest-tax 10-year spread. Income tax is convex (IRAS resident brackets),
+ *  so equal yearly draws minimise total tax. The lever is keeping each year's
+ *  taxable half within the $20k zero-rate band: tax-free draw/yr = 2 x (20k -
+ *  other income). Anything above is taxed.
+ *
+ *  altRatePct models keeping the SRS balance invested *during* the 10-year
+ *  payout: the pot keeps growing, so a level annuity withdrawal exhausts a
+ *  larger total than a plain cash split. */
+function computeOptimal(balance: number, income: number, altRatePct: number): Optimal {
   const evenDraw = balance / SPREAD_YEARS;
   const taxFreeTaxable = Math.max(0, ZERO_TAX_BAND - income);
   const taxFreePerYear = taxFreeTaxable / TAXABLE_FRACTION; // /0.5 == x2
-  const taxablePerYear = evenDraw * TAXABLE_FRACTION;
-  const yearTax = incomeTax(income + taxablePerYear) - incomeTax(income);
+  const baseTax = incomeTax(income);
+  const yearTax = incomeTax(income + evenDraw * TAXABLE_FRACTION) - baseTax;
+
+  // invested drawdown: level payment that empties a pot earning r over 10 yrs
+  const r = altRatePct / 100;
+  const investedDraw = r > 0
+    ? balance * r / (1 - Math.pow(1 + r, -SPREAD_YEARS))
+    : evenDraw;
+  const investedYearTax = incomeTax(income + investedDraw * TAXABLE_FRACTION) - baseTax;
+  const investedTotal = investedDraw * SPREAD_YEARS;
+  const investedTax = investedYearTax * SPREAD_YEARS;
+
   return {
     evenDraw,
     taxFreePerYear,
@@ -37,6 +56,10 @@ function computeOptimal(balance: number, income: number): Optimal {
     totalTax: yearTax * SPREAD_YEARS,
     fullyTaxFree: evenDraw <= taxFreePerYear + 0.01,
     excessPerYear: Math.max(0, evenDraw - taxFreePerYear),
+    investedDraw,
+    investedTotal,
+    investedTax,
+    investedNet: investedTotal - investedTax,
   };
 }
 
@@ -121,6 +144,7 @@ function Leg({ title, leg, best }: { title: string; leg: SrsWithdrawalLeg; best:
 export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: number } = {}) {
   const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 0);
   const [income, setIncome] = useState(0);
+  const [altRate, setAltRate] = useState(10);
   const [result, setResult] = useState<SrsWithdrawal | null>(null);
   const [optimal, setOptimal] = useState<Optimal | null>(null);
 
@@ -128,7 +152,7 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
 
   function compute() {
     setResult(computeWithdrawal(balance, income));
-    setOptimal(computeOptimal(balance, income));
+    setOptimal(computeOptimal(balance, income, altRate));
   }
 
   const spreadBest = result ? result.spread_10y.total_cost <= result.premature.total_cost : false;
@@ -165,6 +189,22 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
               Use projected balance ({sgd(suggested)})
             </button>
           )}
+          <label htmlFor="srs-alt-rate" className="mt-3 mb-1 block text-xs font-medium">
+            Alternative investment (% return during drawdown)
+          </label>
+          <input
+            id="srs-alt-rate"
+            type="number"
+            min={0}
+            step={0.1}
+            value={altRate}
+            onChange={(e) => setAltRate(Math.max(0, Number(e.target.value)))}
+            className={inputCls}
+            aria-label="Alternative investment return during drawdown"
+          />
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            Keep the SRS pot invested while drawing it down over 10 years.
+          </p>
         </div>
         <div>
           <label htmlFor="srs-other-inc" className="mb-1 block text-xs font-medium">
@@ -227,6 +267,38 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
               <dd className="tabular-nums text-[var(--color-primary)]">{sgd(optimal.totalTax)}</dd>
             </div>
           </dl>
+
+          {/* keep-invested scenario */}
+          <div className="mt-3 rounded-lg border border-[var(--color-border)] p-3">
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+              If kept invested at {altRate}% during drawdown
+            </h5>
+            <dl className="mt-2 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-[var(--color-muted)]">Withdraw each year (×10)</dt>
+                <dd className="tabular-nums font-semibold">{sgd(optimal.investedDraw)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[var(--color-muted)]">Total withdrawn</dt>
+                <dd className="tabular-nums">{sgd(optimal.investedTotal)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-[var(--color-muted)]">Total tax</dt>
+                <dd className="tabular-nums">{sgd(optimal.investedTax)}</dd>
+              </div>
+              <div className="flex justify-between border-t border-[var(--color-border)] pt-1 font-medium">
+                <dt>Net after tax</dt>
+                <dd className="tabular-nums text-emerald-600 dark:text-emerald-400">{sgd(optimal.investedNet)}</dd>
+              </div>
+            </dl>
+            <p className="mt-2 text-xs text-[var(--color-muted)]">
+              Investing the pot while you draw it adds{" "}
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                {sgd(optimal.investedTotal - optimal.evenDraw * SPREAD_YEARS)}
+              </span>{" "}
+              vs leaving it as cash — taxed only on the 50% taxable half each year.
+            </p>
+          </div>
           <p className={`mt-2 text-sm font-medium ${optimal.fullyTaxFree ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-fg)]"}`}>
             {optimal.fullyTaxFree
               ? `✓ Spreading ${sgd(optimal.evenDraw)}/year keeps every dollar tax-free.`

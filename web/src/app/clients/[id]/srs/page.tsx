@@ -50,7 +50,7 @@ export default function SrsPage({
       </section>
 
       <section aria-label="SRS withdrawal">
-        <h2 className="mb-3 text-base font-semibold">SRS withdrawal strategy</h2>
+        <h2 className="mb-3 text-base font-semibold">SRS Withdrawal Strategy</h2>
         <SrsWithdrawalCard suggestedBalance={projectedBalance} />
       </section>
     </div>
