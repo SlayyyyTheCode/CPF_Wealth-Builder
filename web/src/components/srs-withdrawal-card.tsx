@@ -23,22 +23,26 @@ interface ScheduleRow {
 interface Optimal {
   totalSum: number;          // the chosen pot to draw down over 10 years
   evenDraw: number;          // equal yearly withdrawal (sum/10)
-  taxFreePerYear: number;    // max draw/yr that stays untaxed, given other income
+  taxFreePerYear: number;    // max draw/yr that stays untaxed, after income & reliefs
   taxFreeCapacity: number;   // tax-free draw over the full 10-year window
-  totalTax: number;          // accumulated tax across the 10 years
+  totalTax: number;          // accumulated tax across the 10 years (minimum possible)
   fullyTaxFree: boolean;
+  overTaxFree: number;       // sum above the 10-year tax-free ceiling (taxed)
   schedule: ScheduleRow[];   // year-by-year breakdown
 }
 
 /** Lowest-tax 10-year drawdown of `sum`. Income tax is convex (IRAS resident
- *  brackets), so equal yearly draws minimise total tax. The full draw is
- *  chargeable, so the tax-free draw/yr = (20k - other income) — the $20k
- *  zero-rate band. Anything above is taxed. */
-function computeOptimal(sum: number, income: number): Optimal {
+ *  brackets), so equal yearly draws are provably the minimum-tax schedule for a
+ *  fixed sum over fixed years. The full draw is chargeable; reliefs and other
+ *  income shift the year's chargeable income, so the tax-free draw/yr =
+ *  20k - (other income - reliefs). */
+function computeOptimal(sum: number, income: number, reliefs: number): Optimal {
   const evenDraw = sum / SPREAD_YEARS;
-  const taxFreePerYear = Math.max(0, ZERO_TAX_BAND - income) / TAXABLE_FRACTION;
-  const baseTax = incomeTax(income);
-  const yearTax = incomeTax(income + evenDraw * TAXABLE_FRACTION) - baseTax;
+  const adj = income - reliefs;                       // adjusted other chargeable income
+  const taxFreePerYear = Math.max(0, ZERO_TAX_BAND - adj);
+  const baseTax = incomeTax(adj);                     // incomeTax floors at 0 for adj<=0
+  const yearTax = Math.max(0, incomeTax(adj + evenDraw * TAXABLE_FRACTION) - baseTax);
+  const taxFreeCapacity = taxFreePerYear * SPREAD_YEARS;
 
   const schedule: ScheduleRow[] = Array.from({ length: SPREAD_YEARS }, (_, i) => {
     const year = i + 1;
@@ -55,24 +59,26 @@ function computeOptimal(sum: number, income: number): Optimal {
     totalSum: sum,
     evenDraw,
     taxFreePerYear,
-    taxFreeCapacity: taxFreePerYear * SPREAD_YEARS,
+    taxFreeCapacity,
     totalTax: yearTax * SPREAD_YEARS,
-    fullyTaxFree: evenDraw <= taxFreePerYear + 0.01,
+    fullyTaxFree: sum <= taxFreeCapacity + 0.01,
+    overTaxFree: Math.max(0, sum - taxFreeCapacity),
     schedule,
   };
 }
 
 /** Client-side SRS withdrawal cost. Full withdrawal is taxable each year
  *  (IRAS brackets); premature adds a 5% penalty on the lump. */
-function computeWithdrawal(balance: number, income: number): SrsWithdrawal {
-  const baseTax = incomeTax(income);
+function computeWithdrawal(balance: number, income: number, reliefs: number): SrsWithdrawal {
+  const adj = income - reliefs;
+  const baseTax = incomeTax(adj);
 
   const spreadDraw = balance / SPREAD_YEARS;
   const spreadTaxable = spreadDraw * TAXABLE_FRACTION;
-  const spreadYearTax = incomeTax(income + spreadTaxable) - baseTax;
+  const spreadYearTax = Math.max(0, incomeTax(adj + spreadTaxable) - baseTax);
   const spreadTotal = spreadYearTax * SPREAD_YEARS;
 
-  const premTax = incomeTax(income + balance) - baseTax;
+  const premTax = Math.max(0, incomeTax(adj + balance) - baseTax);
   const premPenalty = balance * PREMATURE_PENALTY;
   const premTotal = premTax + premPenalty;
 
@@ -144,6 +150,7 @@ function Leg({ title, leg, best }: { title: string; leg: SrsWithdrawalLeg; best:
 export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { suggestedBalance?: number; suggestedAltBalance?: number } = {}) {
   const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 0);
   const [income, setIncome] = useState(0);
+  const [reliefs, setReliefs] = useState(0);
   const [altBalance, setAltBalance] = useState(suggestedAltBalance && suggestedAltBalance > 0 ? Math.round(suggestedAltBalance) : 0);
   const [source, setSource] = useState<"srs" | "alt">("srs");
   const [result, setResult] = useState<SrsWithdrawal | null>(null);
@@ -155,13 +162,13 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
   const sumFor = (s: "srs" | "alt") => (s === "srs" ? balance : altBalance);
 
   function compute() {
-    setResult(computeWithdrawal(balance, income));
-    setOptimal(computeOptimal(sumFor(source), income));
+    setResult(computeWithdrawal(balance, income, reliefs));
+    setOptimal(computeOptimal(sumFor(source), income, reliefs));
   }
 
   function changeSource(s: "srs" | "alt") {
     setSource(s);
-    if (optimal) setOptimal(computeOptimal(sumFor(s), income));
+    if (optimal) setOptimal(computeOptimal(sumFor(s), income, reliefs));
   }
 
   const spreadBest = result ? result.spread_10y.total_cost <= result.premature.total_cost : false;
@@ -237,6 +244,21 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
             className={inputCls}
             aria-label="Other chargeable income per withdrawal year"
           />
+          <label htmlFor="srs-reliefs" className="mt-3 mb-1 block text-xs font-medium">
+            Reliefs / deductions / year (S$)
+          </label>
+          <input
+            id="srs-reliefs"
+            type="number"
+            min={0}
+            value={reliefs}
+            onChange={(e) => setReliefs(Math.max(0, Number(e.target.value)))}
+            className={inputCls}
+            aria-label="Annual tax reliefs and deductions"
+          />
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            Parent relief, CPF top-up, etc. Widens the tax-free withdrawal band.
+          </p>
         </div>
       </div>
       <button onClick={compute} className={btnCls}>
@@ -306,6 +328,34 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
             </div>
           </dl>
 
+          {/* minimize-tax callout */}
+          <div className={`mt-3 rounded-lg p-3 text-sm ${optimal.fullyTaxFree ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-[var(--color-surface)]"}`}>
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+              Minimize tax
+            </h5>
+            <p className="mt-1">
+              Max tax-free withdrawal:{" "}
+              <span className="font-semibold tabular-nums">{sgd(optimal.taxFreePerYear)}/year</span>{" "}
+              (<span className="tabular-nums">{sgd(optimal.taxFreeCapacity)}</span> over 10 years).
+            </p>
+            {optimal.fullyTaxFree ? (
+              <p className="mt-1 font-medium text-emerald-700 dark:text-emerald-300">
+                ✓ {sgd(optimal.totalSum)} fits inside the tax-free capacity — spread it
+                evenly over 10 years and pay <span className="tabular-nums">{sgd(0)}</span> tax.
+              </p>
+            ) : (
+              <p className="mt-1">
+                {sgd(optimal.totalSum)} is{" "}
+                <span className="font-medium text-[var(--color-error)]">{sgd(optimal.overTaxFree)}</span>{" "}
+                above the tax-free ceiling, so the minimum possible tax is{" "}
+                <span className="font-semibold tabular-nums text-[var(--color-primary)]">{sgd(optimal.totalTax)}</span>{" "}
+                (even spread is provably optimal). To reach {sgd(0)} tax: lower other
+                income, add reliefs, or keep the withdrawn sum at or below{" "}
+                <span className="tabular-nums">{sgd(optimal.taxFreeCapacity)}</span>.
+              </p>
+            )}
+          </div>
+
           {/* year-by-year breakdown */}
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
@@ -346,12 +396,6 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
               10; cumulative tax reaches {sgd(optimal.totalTax)}.
             </p>
           </div>
-
-          <p className={`mt-2 text-sm font-medium ${optimal.fullyTaxFree ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-fg)]"}`}>
-            {optimal.fullyTaxFree
-              ? `✓ Spreading ${sgd(optimal.evenDraw)}/year keeps every dollar tax-free.`
-              : `Withdrawals above ${sgd(optimal.taxFreePerYear)}/year are taxed. Even spread is already the lowest-tax option within the 10-year limit, so ${sgd(optimal.totalTax)} of tax is unavoidable at this sum.`}
-          </p>
         </div>
       )}
     </div>
