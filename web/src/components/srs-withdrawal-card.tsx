@@ -39,10 +39,10 @@ interface Optimal {
  *  taxable half within the $20k zero-rate band: tax-free draw/yr = 2 x (20k -
  *  other income). Anything above is taxed.
  *
- *  altRatePct models keeping the SRS balance invested *during* the 10-year
- *  payout: the pot keeps growing, so a level annuity withdrawal exhausts a
- *  larger total than a plain cash split. */
-function computeOptimal(balance: number, income: number, altRatePct: number): Optimal {
+ *  altBalance is the alternative-investment pot at retirement (from the User
+ *  panel). Drawing that larger pot down evenly over 10 years yields more total
+ *  cash than the plain SRS balance, taxed only on the 50% taxable half. */
+function computeOptimal(balance: number, income: number, altBalance: number): Optimal {
   const evenDraw = balance / SPREAD_YEARS;
   const taxFreeTaxable = Math.max(0, ZERO_TAX_BAND - income);
   const taxFreePerYear = taxFreeTaxable / TAXABLE_FRACTION; // /0.5 == x2
@@ -61,13 +61,10 @@ function computeOptimal(balance: number, income: number, altRatePct: number): Op
     };
   });
 
-  // invested drawdown: level payment that empties a pot earning r over 10 yrs
-  const r = altRatePct / 100;
-  const investedDraw = r > 0
-    ? balance * r / (1 - Math.pow(1 + r, -SPREAD_YEARS))
-    : evenDraw;
+  // alternative-balance drawdown: spread the alt pot evenly over 10 years
+  const investedDraw = altBalance / SPREAD_YEARS;
   const investedYearTax = incomeTax(income + investedDraw * TAXABLE_FRACTION) - baseTax;
-  const investedTotal = investedDraw * SPREAD_YEARS;
+  const investedTotal = altBalance;
   const investedTax = investedYearTax * SPREAD_YEARS;
 
   return {
@@ -163,18 +160,19 @@ function Leg({ title, leg, best }: { title: string; leg: SrsWithdrawalLeg; best:
   );
 }
 
-export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: number } = {}) {
+export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { suggestedBalance?: number; suggestedAltBalance?: number } = {}) {
   const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 0);
   const [income, setIncome] = useState(0);
-  const [altRate, setAltRate] = useState(10);
+  const [altBalance, setAltBalance] = useState(suggestedAltBalance && suggestedAltBalance > 0 ? Math.round(suggestedAltBalance) : 0);
   const [result, setResult] = useState<SrsWithdrawal | null>(null);
   const [optimal, setOptimal] = useState<Optimal | null>(null);
 
   const suggested = suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : null;
+  const suggestedAlt = suggestedAltBalance && suggestedAltBalance > 0 ? Math.round(suggestedAltBalance) : null;
 
   function compute() {
     setResult(computeWithdrawal(balance, income));
-    setOptimal(computeOptimal(balance, income, altRate));
+    setOptimal(computeOptimal(balance, income, altBalance));
   }
 
   const spreadBest = result ? result.spread_10y.total_cost <= result.premature.total_cost : false;
@@ -211,21 +209,29 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
               Use projected balance ({sgd(suggested)})
             </button>
           )}
-          <label htmlFor="srs-alt-rate" className="mt-3 mb-1 block text-xs font-medium">
-            Alternative investment (% return during drawdown)
+          <label htmlFor="srs-alt-bal" className="mt-3 mb-1 block text-xs font-medium">
+            Alternative Balance at Retirement (S$)
           </label>
           <input
-            id="srs-alt-rate"
+            id="srs-alt-bal"
             type="number"
             min={0}
-            step={0.1}
-            value={altRate}
-            onChange={(e) => setAltRate(Math.max(0, Number(e.target.value)))}
+            value={altBalance}
+            onChange={(e) => setAltBalance(Math.max(0, Number(e.target.value)))}
             className={inputCls}
-            aria-label="Alternative investment return during drawdown"
+            aria-label="Alternative balance at retirement"
           />
+          {suggestedAlt !== null && suggestedAlt !== altBalance && (
+            <button
+              type="button"
+              onClick={() => setAltBalance(suggestedAlt)}
+              className="mt-1 text-xs font-medium text-[var(--color-primary)] hover:underline"
+            >
+              Use projected alternative ({sgd(suggestedAlt)})
+            </button>
+          )}
           <p className="mt-1 text-xs text-[var(--color-muted)]">
-            Keep the SRS pot invested while drawing it down over 10 years.
+            From the User panel&apos;s alternative-investment projection.
           </p>
         </div>
         <div>
@@ -331,10 +337,10 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
             </p>
           </div>
 
-          {/* keep-invested scenario */}
+          {/* alternative-balance drawdown scenario */}
           <div className="mt-3 rounded-lg border border-[var(--color-border)] p-3">
             <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
-              If kept invested at {altRate}% during drawdown
+              Alternative balance drawdown ({sgd(altBalance)})
             </h5>
             <dl className="mt-2 space-y-1 text-sm">
               <div className="flex justify-between">
@@ -355,11 +361,11 @@ export function SrsWithdrawalCard({ suggestedBalance }: { suggestedBalance?: num
               </div>
             </dl>
             <p className="mt-2 text-xs text-[var(--color-muted)]">
-              Investing the pot while you draw it adds{" "}
+              The alternative pot is{" "}
               <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                {sgd(optimal.investedTotal - optimal.evenDraw * SPREAD_YEARS)}
+                {sgd(optimal.investedTotal - balance)}
               </span>{" "}
-              vs leaving it as cash — taxed only on the 50% taxable half each year.
+              larger than the SRS cash balance — taxed only on the 50% taxable half each year.
             </p>
           </div>
           <p className={`mt-2 text-sm font-medium ${optimal.fullyTaxFree ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-fg)]"}`}>

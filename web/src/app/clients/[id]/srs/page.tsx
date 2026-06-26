@@ -16,6 +16,7 @@ export default function SrsPage({
   const [currentAge, setCurrentAge] = useState<number | null>(null);
   const [residency, setResidency] = useState<Residency>("citizen");
   const [projectedBalance, setProjectedBalance] = useState(0);
+  const [projectedAlt, setProjectedAlt] = useState(0);
 
   useEffect(() => {
     let ok = true;
@@ -32,6 +33,7 @@ export default function SrsPage({
   }, [id]);
 
   const handleProjected = useCallback((n: number) => setProjectedBalance(n), []);
+  const handleProjectedAlt = useCallback((n: number) => setProjectedAlt(n), []);
 
   return (
     <div>
@@ -46,12 +48,13 @@ export default function SrsPage({
           initialAge={currentAge}
           residency={residency}
           onProjectedBalance={handleProjected}
+          onProjectedAltBalance={handleProjectedAlt}
         />
       </section>
 
       <section aria-label="SRS withdrawal">
         <h2 className="mb-3 text-base font-semibold">SRS Withdrawal Strategy</h2>
-        <SrsWithdrawalCard suggestedBalance={projectedBalance} />
+        <SrsWithdrawalCard suggestedBalance={projectedBalance} suggestedAltBalance={projectedAlt} />
       </section>
     </div>
   );

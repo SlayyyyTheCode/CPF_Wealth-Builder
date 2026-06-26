@@ -40,10 +40,12 @@ export function SrsUserPanel({
   initialAge,
   residency,
   onProjectedBalance,
+  onProjectedAltBalance,
 }: {
   initialAge: number | null;
   residency: Residency;
   onProjectedBalance?: (n: number) => void;
+  onProjectedAltBalance?: (n: number) => void;
 }) {
   const [age, setAge] = useState(35);
   const [ageTouched, setAgeTouched] = useState(false);
@@ -75,10 +77,13 @@ export function SrsUserPanel({
     return { years, annualContribution, totalContributed, srsBalance, altBalance, series, delta: altBalance - srsBalance };
   }, [effectiveAge, age, withdrawalAge, initialAmount, contribution, freq, srsInterest, altInterest]);
 
-  // feed the projected SRS balance up to the page (→ withdrawal card prefill)
+  // feed the projected balances up to the page (→ withdrawal card prefill)
   useEffect(() => {
     onProjectedBalance?.(proj.srsBalance);
   }, [proj.srsBalance, onProjectedBalance]);
+  useEffect(() => {
+    onProjectedAltBalance?.(proj.altBalance);
+  }, [proj.altBalance, onProjectedAltBalance]);
 
   const overCap = proj.annualContribution > cap;
 
