@@ -46,17 +46,17 @@ export function AppShell({
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] text-white shadow-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          <div className="font-bold text-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:px-6">
+          <div className="min-w-0 truncate font-bold text-white">
             <Link href="/" className="hover:opacity-90 transition-opacity">CPF Builder</Link>
             {clientName && (
               <span className="text-white/80"> · {clientName}</span>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             <Link
               href="/admin/policy"
-              className="text-sm text-white/80 hover:text-white transition-colors"
+              className="whitespace-nowrap text-sm text-white/80 hover:text-white transition-colors"
             >
               Policy admin
             </Link>

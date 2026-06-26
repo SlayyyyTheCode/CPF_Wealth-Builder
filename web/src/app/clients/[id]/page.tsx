@@ -1,11 +1,25 @@
 "use client";
 import { use, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { KpiCard } from "@/components/kpi-card";
 import { ReadinessRing } from "@/components/readiness-ring";
 import { CpfLifeCard } from "@/components/cpf-life-card";
-import { NetWorthChart } from "@/components/net-worth-chart";
-import { AccountBreakdownChart } from "@/components/account-breakdown-chart";
-import { GrowthChart } from "@/components/growth-chart";
+import { ChartSkeleton } from "@/components/chart-skeleton";
+
+// Charts pull in recharts (~heavy). Load them as a separate async chunk so the
+// KPIs and shell paint first — big win on mobile / slow networks.
+const NetWorthChart = dynamic(
+  () => import("@/components/net-worth-chart").then((m) => ({ default: m.NetWorthChart })),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+);
+const AccountBreakdownChart = dynamic(
+  () => import("@/components/account-breakdown-chart").then((m) => ({ default: m.AccountBreakdownChart })),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+);
+const GrowthChart = dynamic(
+  () => import("@/components/growth-chart").then((m) => ({ default: m.GrowthChart })),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+);
 import { PageHeading, OverviewIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { getMember, simulate, peekMember, peekSim } from "@/lib/api";

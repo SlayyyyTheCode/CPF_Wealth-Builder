@@ -1,20 +1,15 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList } from "recharts";
+import dynamic from "next/dynamic";
 import { sgd } from "@/lib/format";
 import type { Residency } from "@/lib/types";
+import { ChartSkeleton } from "@/components/chart-skeleton";
 
-// Label the final point of a line with its dollar value (the "amount").
-function endLabel(lastIndex: number, color: string) {
-  return function Label(props: { x?: number | string; y?: number | string; value?: number | string | boolean | null; index?: number }) {
-    if (props.index !== lastIndex || props.x == null || props.y == null) return <text />;
-    return (
-      <text x={Number(props.x)} y={Number(props.y)} dy={-8} fontSize={11} fontWeight={600} textAnchor="end" fill={color}>
-        {sgd(Number(props.value))}
-      </text>
-    );
-  };
-}
+// Defer recharts so the inputs/projection paint first (faster on mobile).
+const SrsGrowthChart = dynamic(
+  () => import("@/components/srs-growth-chart").then((m) => ({ default: m.SrsGrowthChart })),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+);
 
 const inputCls =
   "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]";
@@ -187,22 +182,12 @@ export function SrsUserPanel({
 
       {/* growth chart */}
       {proj.series.length > 1 && (
-        <div className="h-64" role="img" aria-label="Line chart comparing SRS cash growth against the alternative investment by age">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={proj.series} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
-              <XAxis dataKey="age" tick={{ fontSize: 12 }} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} width={44} />
-              <Tooltip formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)} />
-              <Legend />
-              <Line isAnimationActive={false} type="monotone" dataKey="srs" name={`SRS cash (${srsInterest}%)`} stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 2 }}>
-                <LabelList dataKey="srs" content={endLabel(proj.series.length - 1, "var(--chart-1)")} />
-              </Line>
-              <Line isAnimationActive={false} type="monotone" dataKey="alt" name={`${altName || "Alternative"} (${altInterest}%)`} stroke="var(--chart-2)" strokeWidth={2.5} dot={{ r: 2 }}>
-                <LabelList dataKey="alt" content={endLabel(proj.series.length - 1, "var(--chart-2)")} />
-              </Line>
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <SrsGrowthChart
+          series={proj.series}
+          srsInterest={srsInterest}
+          altInterest={altInterest}
+          altName={altName}
+        />
       )}
 
       <div className="rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm">
