@@ -1,4 +1,4 @@
-import type { MemberSummary, Member, NewMember, SimRun, Analysis, IngestResult, SnapshotListItem, MemberUpdate, TaxEstimate, TaxRelief, Residency } from "@/lib/types";
+import type { MemberSummary, Member, NewMember, SimRun, Analysis, IngestResult, SnapshotListItem, MemberUpdate, TaxEstimate, TaxRelief, Residency, SrsWithdrawal } from "@/lib/types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -150,3 +150,5 @@ export const taxEstimate = (income: number, deduction: number) =>
   apiPost<TaxEstimate>("/tax/estimate", { income, deduction });
 export const taxReliefCalc = (body: { income: number; rstu_self?: number; rstu_family?: number; voluntary_cpf?: number; srs_contribution?: number; residency?: Residency }) =>
   apiPost<TaxRelief>("/tax/relief", body);
+export const srsWithdrawal = (body: { balance: number; annual_income?: number }) =>
+  apiPost<SrsWithdrawal>("/srs/withdrawal", body);

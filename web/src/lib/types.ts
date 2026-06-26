@@ -68,6 +68,8 @@ export interface MemberUpdate { name?: string; dob?: string; monthly_gross_wage?
 export interface TaxEstimate { estimated_tax_saved: number; marginal_rate: number; }
 export type Residency = "citizen" | "pr" | "foreigner";
 export interface TaxRelief { relief_earned: number; remaining_cap: number; estimated_tax_saved: number; marginal_rate: number; srs_relief: number; srs_remaining_cap: number; total_relief: number; personal_cap_hit: boolean; }
+export interface SrsWithdrawalLeg { mode: string; years: { year: number; draw: number; taxable: number; tax: number }[]; lifetime_tax: number; penalty: number; total_cost: number; effective_rate: number; }
+export interface SrsWithdrawal { spread_10y: SrsWithdrawalLeg; premature: SrsWithdrawalLeg; premature_extra_cost: number; }
 export interface Assumptions {
   readiness: { w_sum: number; w_ma: number; on_track: number; below_frs_pace: number };
   growth: { sum_rate: number; bhs_rate: number };

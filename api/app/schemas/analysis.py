@@ -30,3 +30,8 @@ class TaxReliefRequest(BaseModel):
 class TaxEstimateRequest(BaseModel):
     income: float
     deduction: float = 0
+
+
+class SrsWithdrawalRequest(BaseModel):
+    balance: float
+    annual_income: float = 0  # other chargeable income during withdrawal years

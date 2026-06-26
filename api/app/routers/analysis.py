@@ -18,7 +18,11 @@ from app.engines.scenarios import (
 )
 from app.engines.growth import recommend_strategies
 from app.engines.tax import compute_relief, income_tax, marginal_rate
-from app.schemas.analysis import AnalysisRequest, AnalysisResponse, TaxReliefRequest, TaxEstimateRequest
+from app.engines.srs import model_srs_withdrawal
+from app.schemas.analysis import (
+    AnalysisRequest, AnalysisResponse, TaxReliefRequest, TaxEstimateRequest,
+    SrsWithdrawalRequest,
+)
 
 router = APIRouter(tags=["analysis"])
 
@@ -126,6 +130,43 @@ def tax_relief(req: TaxReliefRequest, db: Session = Depends(get_db)):
         "srs_remaining_cap": float(r["srs_remaining_cap"]),
         "total_relief": float(r["total_relief"]),
         "personal_cap_hit": r["personal_cap_hit"],
+    }
+
+
+def _srs_floats(r: dict) -> dict:
+    return {
+        "mode": r["mode"],
+        "years": [
+            {"year": y["year"], "draw": float(y["draw"]),
+             "taxable": float(y["taxable"]), "tax": float(y["tax"])}
+            for y in r["years"]
+        ],
+        "lifetime_tax": float(r["lifetime_tax"]),
+        "penalty": float(r["penalty"]),
+        "total_cost": float(r["total_cost"]),
+        "effective_rate": r["effective_rate"],
+    }
+
+
+@router.post("/srs/withdrawal")
+def srs_withdrawal(req: SrsWithdrawalRequest, db: Session = Depends(get_db)):
+    snap = db.scalars(
+        select(PolicySnapshot)
+        .where(PolicySnapshot.status == "active")
+        .order_by(PolicySnapshot.effective_year.desc())
+    ).first()
+    if not snap:
+        raise HTTPException(404, "No active policy snapshot")
+    policy = snapshot_to_policy(snap)
+    bal = Decimal(str(req.balance))
+    inc = Decimal(str(req.annual_income))
+    spread = model_srs_withdrawal(bal, "spread_10y", policy, annual_income=inc)
+    premature = model_srs_withdrawal(bal, "premature", policy, annual_income=inc)
+    return {
+        "spread_10y": _srs_floats(spread),
+        "premature": _srs_floats(premature),
+        # extra lifetime cost of cashing out early vs spreading
+        "premature_extra_cost": float(premature["total_cost"] - spread["total_cost"]),
     }
 
 
