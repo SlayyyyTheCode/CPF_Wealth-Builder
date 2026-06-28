@@ -1,5 +1,5 @@
 "use client";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, LabelList, ReferenceLine } from "recharts";
 import { sgd } from "@/lib/format";
 
 export interface SrsSeriesPoint { age: number; srs: number; alt: number }
@@ -35,6 +35,12 @@ export function SrsGrowthChart({
           <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 12 }} width={44} />
           <Tooltip formatter={(v) => typeof v === "number" ? `$${v.toLocaleString()}` : String(v)} />
           <Legend />
+          <ReferenceLine
+            y={1_000_000}
+            stroke="var(--color-error)"
+            strokeDasharray="5 4"
+            label={{ value: "$1M", position: "insideTopRight", fontSize: 11, fill: "var(--color-error)" }}
+          />
           <Line isAnimationActive={false} type="monotone" dataKey="srs" name={`SRS cash (${srsInterest}%)`} stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 2 }}>
             <LabelList dataKey="srs" content={endLabel(series.length - 1, "var(--chart-1)")} />
           </Line>

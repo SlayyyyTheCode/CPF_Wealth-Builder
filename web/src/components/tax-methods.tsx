@@ -348,12 +348,14 @@ function TaxAfterDeductionCard({
   rstu,
   charity,
   parent,
+  ns,
 }: {
   income: number;
   srs: number;
   rstu: number;
   charity: number;
   parent: number;
+  ns: number;
 }) {
   const [result, setResult] = useState<{
     income: number;
@@ -371,10 +373,11 @@ function TaxAfterDeductionCard({
     setErr(null);
     setLoading(true);
     try {
-      const [srsR, charityR, parentR, rstuR] = await Promise.all([
+      const [srsR, charityR, parentR, nsR, rstuR] = await Promise.all([
         taxEstimate(income, srs),
         taxEstimate(income, charity * 2.5),
         taxEstimate(income, parent),
+        taxEstimate(income, ns),
         taxReliefCalc({ income, rstu_self: rstu }),
       ]);
       const rows = [
@@ -382,6 +385,7 @@ function TaxAfterDeductionCard({
         { label: "CPF cash top-up (RSTU)", saved: rstuR.estimated_tax_saved },
         { label: "Charity donation (2.5×)", saved: charityR.estimated_tax_saved },
         { label: "Parent relief", saved: parentR.estimated_tax_saved },
+        { label: "NS relief", saved: nsR.estimated_tax_saved },
       ];
       const taxPayable = computeIncomeTax(income).tax;
       const totalSaved = rows.reduce((s, r) => s + r.saved, 0);
@@ -405,9 +409,9 @@ function TaxAfterDeductionCard({
         <h3 className="font-semibold">Estimated Tax After Deduction</h3>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Sums the tax saved from every deductible relief above (SRS, CPF top-up,
-          charity 2.5×, parent relief) so the total matches each card&apos;s
-          estimate. The voluntary housing refund is not income-tax deductible, so
-          it is excluded. Adjust any field above, then compute.
+          charity 2.5×, parent relief, NS relief) so the total matches each
+          card&apos;s estimate. The voluntary housing refund is not income-tax
+          deductible, so it is excluded. Adjust any field above, then compute.
         </p>
       </div>
 
@@ -487,6 +491,7 @@ export function TaxMethods({ initialResidency = "citizen" }: { initialResidency?
   const [charity, setCharity] = useState(1000);
   const [parent, setParent] = useState(9000);
   const [vhr, setVhr] = useState(20000);
+  const [ns, setNs] = useState(5000);
 
   const { tax, marginal } = computeIncomeTax(income);
   const effectiveRate = income > 0 ? (tax / income) * 100 : 0;
@@ -568,7 +573,17 @@ export function TaxMethods({ initialResidency = "citizen" }: { initialResidency?
           deductible={false}
           note="A voluntary housing refund is not income-tax deductible, so it saves no income tax. It restores your CPF savings and the accrued interest, boosting your retirement nest egg."
         />
-        <TaxAfterDeductionCard income={income} srs={srs} rstu={rstu} charity={charity} parent={parent} />
+        <AmountTaxCard
+          uid="ns-relief"
+          income={income}
+          title="NS Relief"
+          description="National Service tax relief for operationally-ready NSmen (and eligible spouses/parents). Each dollar reduces your assessable income dollar-for-dollar."
+          inputLabel="NS relief claimed (S$)"
+          amount={ns}
+          setAmount={setNs}
+          multiplier={1}
+        />
+        <TaxAfterDeductionCard income={income} srs={srs} rstu={rstu} charity={charity} parent={parent} ns={ns} />
       </div>
     </section>
   );

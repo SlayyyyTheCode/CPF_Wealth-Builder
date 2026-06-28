@@ -82,10 +82,28 @@ export function SrsUserPanel({
 
   const overCap = proj.annualContribution > cap;
 
+  // Annual contribution needed to reach $1M by withdrawal age, growing the pot
+  // at the alternative-investment rate (SRS cash at 0.05% can't realistically
+  // get there). null = no runway; 0 = the initial amount already gets there.
+  const MILLION = 1_000_000;
+  const reqAnnualToMillion = useMemo(() => {
+    const n = proj.years;
+    if (n <= 0) return null;
+    const r = altInterest / 100;
+    const grownInitial = initialAmount * Math.pow(1 + r, n);
+    const remaining = MILLION - grownInitial;
+    if (remaining <= 0) return 0;
+    const annuityFactor = r > 0 ? (Math.pow(1 + r, n) - 1) / r : n;
+    return remaining / annuityFactor;
+  }, [proj.years, altInterest, initialAmount]);
+  const reqPerPeriod = reqAnnualToMillion === null || reqAnnualToMillion === 0
+    ? reqAnnualToMillion
+    : freq === "monthly" ? reqAnnualToMillion / 12 : reqAnnualToMillion;
+
   return (
     <div className={cardCls}>
       <div>
-        <h3 className="font-semibold">User</h3>
+        <h3 className="font-semibold">Customized Client SRS Portfolio</h3>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Project your SRS balance at withdrawal age. Uninvested SRS cash earns
           ~0.05%; investing it can grow the pot materially. Compare both.
@@ -130,6 +148,13 @@ export function SrsUserPanel({
               <option value="yearly">Yearly</option>
             </select>
           </div>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            {reqPerPeriod === null
+              ? "Set a withdrawal age above current age to target $1M."
+              : reqPerPeriod === 0
+                ? "🎯 Initial amount alone reaches $1M by withdrawal age."
+                : <>🎯 Contribute ~<span className="font-semibold">{sgd(reqPerPeriod)}/{freq === "monthly" ? "mo" : "yr"}</span> at {altInterest}% to hit $1M by age {withdrawalAge}{reqAnnualToMillion! > cap ? ` (above SRS cap ${sgd(cap)})` : ""}.</>}
+          </p>
         </div>
 
         <div>
