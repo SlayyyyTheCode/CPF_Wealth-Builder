@@ -10,7 +10,7 @@ from app.models.member import MemberProfile
 from app.models.policy import PolicySnapshot
 from app.models.simulation import SimulationRun
 from app.engines.domain import AccountState, SimulationInput, SelfEmployedNotSupported
-from app.engines.policy_resolver import make_db_resolver, GrowthAssumptions
+from app.engines.policy_resolver import make_db_resolver, fetch_active_snapshots, GrowthAssumptions
 from app.engines.serialize import serialize_result
 from app.engines.milestones import compute_milestones
 from app.engines.simulation import run_simulation
@@ -111,10 +111,13 @@ def simulate(member_id: int, req: SimulateRequest, response: Response, db: Sessi
         bonus_months=Decimal(str(getattr(member, "bonus_months", 0) or 0)),
     )
 
+    # One query for the active snapshots, reused by both resolvers below.
+    actives = fetch_active_snapshots(db)
+
     # Resolve growth rates: use request values when provided, else fall back to
     # the active policy's editable assumptions.
     if req.apply_growth:
-        _assumptions_resolve = make_db_resolver(db, None)
+        _assumptions_resolve = make_db_resolver(db, None, actives=actives)
         g = _assumptions_resolve(start_year).get("assumptions", {}).get("growth", {})
         sum_rate = req.growth_sum_rate if req.growth_sum_rate is not None else g.get("sum_rate", 0.035)
         bhs_rate = req.growth_bhs_rate if req.growth_bhs_rate is not None else g.get("bhs_rate", 0.045)
@@ -125,7 +128,7 @@ def simulate(member_id: int, req: SimulateRequest, response: Response, db: Sessi
     else:
         growth = None
 
-    resolve = make_db_resolver(db, growth)
+    resolve = make_db_resolver(db, growth, actives=actives)
     try:
         res = run_simulation(inp, resolve)
     except SelfEmployedNotSupported as exc:

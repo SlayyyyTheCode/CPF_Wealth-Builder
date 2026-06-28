@@ -10,7 +10,7 @@ from app.models.member import MemberProfile
 from app.models.policy import PolicySnapshot
 from app.engines.domain import AccountState, SimulationInput, SelfEmployedNotSupported
 from app.engines.policy_resolver import (
-    make_db_resolver, snapshot_to_policy, GrowthAssumptions,
+    make_db_resolver, fetch_active_snapshots, snapshot_to_policy, GrowthAssumptions,
 )
 from app.engines.simulation import run_simulation
 from app.engines.scenarios import (
@@ -44,10 +44,13 @@ def analyse(member_id: int, req: AnalysisRequest, db: Session = Depends(get_db))
     if not member:
         raise HTTPException(404, "Member not found")
 
+    # One query for the active snapshots, reused by both resolvers below.
+    actives = fetch_active_snapshots(db)
+
     # Resolve growth rates: use request values when provided, else fall back to
     # the active policy's editable assumptions.
     if req.apply_growth:
-        _assumptions_resolve = make_db_resolver(db, None)
+        _assumptions_resolve = make_db_resolver(db, None, actives=actives)
         g = _assumptions_resolve(date.today().year).get("assumptions", {}).get("growth", {})
         sum_rate = req.growth_sum_rate if req.growth_sum_rate is not None else g.get("sum_rate", 0.035)
         bhs_rate = req.growth_bhs_rate if req.growth_bhs_rate is not None else g.get("bhs_rate", 0.045)
@@ -57,7 +60,7 @@ def analyse(member_id: int, req: AnalysisRequest, db: Session = Depends(get_db))
         )
     else:
         growth = None
-    resolve = make_db_resolver(db, growth)
+    resolve = make_db_resolver(db, growth, actives=actives)
 
     inp = SimulationInput(
         opening=_balances_to_state(member.balances),

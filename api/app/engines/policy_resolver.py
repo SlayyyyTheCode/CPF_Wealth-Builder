@@ -54,12 +54,23 @@ def project_policy(base_policy: dict, base_year: int, target_year: int,
     return projected
 
 
-def make_db_resolver(db: Session, growth: GrowthAssumptions | None = None):
-    # Fetch active snapshots ONCE. The simulation resolves ~66 distinct years;
-    # querying per year hammered remote Postgres (tens of seconds). One query now.
-    actives = db.scalars(
-        select(PolicySnapshot).where(PolicySnapshot.status == "active")
-    ).all()
+def fetch_active_snapshots(db: Session) -> list[PolicySnapshot]:
+    """Active policy snapshots in one query. Reuse across resolvers to avoid
+    repeated round-trips to remote Postgres within a single request."""
+    return list(
+        db.scalars(select(PolicySnapshot).where(PolicySnapshot.status == "active")).all()
+    )
+
+
+def make_db_resolver(
+    db: Session,
+    growth: GrowthAssumptions | None = None,
+    actives: list[PolicySnapshot] | None = None,
+):
+    # Fetch active snapshots ONCE (or reuse a preloaded list). The simulation
+    # resolves ~66 distinct years; querying per year hammered remote Postgres.
+    if actives is None:
+        actives = fetch_active_snapshots(db)
     if not actives:
         raise ValueError("no active policy snapshot")
 
