@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { MemberSummary } from "@/lib/types";
 import { sgd, ageFromDob } from "@/lib/format";
 import { ReadinessBadge } from "./readiness-badge";
-import { deleteMember } from "@/lib/api";
+import { deleteMember, warmClient, getMember } from "@/lib/api";
 import { useToast } from "./toast";
 import { useConfirm } from "./confirm-dialog";
 
@@ -21,6 +21,16 @@ export function ClientCard({
   const [busy, setBusy] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
+
+  // Warm member + projection on intent-to-open (hover / focus / touch) so the
+  // dashboard renders from cache instantly. Skip locked clients (honour the
+  // password gate). Fire-and-forget; results are cached in the api layer.
+  const locked = m.has_password && !admin;
+  const prefetch = () => {
+    if (locked) return;
+    getMember(m.id).catch(() => {});
+    warmClient(m.id);
+  };
 
   async function handleDelete(e: React.MouseEvent) {
     e.preventDefault();
@@ -46,6 +56,9 @@ export function ClientCard({
   return (
     <Link
       href={`/clients/${m.id}`}
+      onMouseEnter={prefetch}
+      onFocus={prefetch}
+      onTouchStart={prefetch}
       className="relative block rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] transition hover:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
     >
       {admin && (

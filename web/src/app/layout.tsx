@@ -27,6 +27,16 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
+// Open the DNS/TLS connection to the API origin during page load so the first
+// data fetch doesn't pay the handshake cost. Cuts latency on every device.
+const apiOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").origin;
+  } catch {
+    return null;
+  }
+})();
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,6 +48,12 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      {apiOrigin && (
+        <head>
+          <link rel="preconnect" href={apiOrigin} crossOrigin="anonymous" />
+          <link rel="dns-prefetch" href={apiOrigin} />
+        </head>
+      )}
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           <ToastProvider>
