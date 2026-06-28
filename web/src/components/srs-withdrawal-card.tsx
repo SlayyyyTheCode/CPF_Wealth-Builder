@@ -150,7 +150,6 @@ function Leg({ title, leg, best }: { title: string; leg: SrsWithdrawalLeg; best:
 
 export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { suggestedBalance?: number; suggestedAltBalance?: number } = {}) {
   const [balance, setBalance] = useState(suggestedBalance && suggestedBalance > 0 ? Math.round(suggestedBalance) : 0);
-  const [reliefs, setReliefs] = useState(0);
   const [altBalance, setAltBalance] = useState(suggestedAltBalance && suggestedAltBalance > 0 ? Math.round(suggestedAltBalance) : 0);
   const [source, setSource] = useState<"srs" | "alt">("srs");
   const [result, setResult] = useState<SrsWithdrawal | null>(null);
@@ -162,17 +161,17 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
   const sumFor = (s: "srs" | "alt") => (s === "srs" ? balance : altBalance);
 
   // Largest pot that is 100% tax-free when spread over 10 years (no other
-  // income; reliefs widen the band). Default with reliefs 0 = $400,000.
-  const taxFreeCapacityHint = ((ZERO_TAX_BAND + reliefs) / TAXABLE_FRACTION) * SPREAD_YEARS;
+  // income). $20k band / 50% taxable x 10 years = $400,000.
+  const taxFreeCapacityHint = (ZERO_TAX_BAND / TAXABLE_FRACTION) * SPREAD_YEARS;
 
   function compute() {
-    setResult(computeWithdrawal(balance, 0, reliefs));
-    setOptimal(computeOptimal(sumFor(source), 0, reliefs));
+    setResult(computeWithdrawal(balance, 0, 0));
+    setOptimal(computeOptimal(sumFor(source), 0, 0));
   }
 
   function changeSource(s: "srs" | "alt") {
     setSource(s);
-    if (optimal) setOptimal(computeOptimal(sumFor(s), 0, reliefs));
+    if (optimal) setOptimal(computeOptimal(sumFor(s), 0, 0));
   }
 
   const spreadBest = result ? result.spread_10y.total_cost <= result.premature.total_cost : false;
@@ -237,23 +236,6 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
           )}
           <p className="mt-1 text-xs text-[var(--color-muted)]">
             From the User panel&apos;s alternative-investment projection.
-          </p>
-        </div>
-        <div>
-          <label htmlFor="srs-reliefs" className="mb-1 block text-xs font-medium">
-            Reliefs / deductions / year (S$)
-          </label>
-          <input
-            id="srs-reliefs"
-            type="number"
-            min={0}
-            value={reliefs}
-            onChange={(e) => setReliefs(Math.max(0, Number(e.target.value)))}
-            className={inputCls}
-            aria-label="Annual tax reliefs and deductions"
-          />
-          <p className="mt-1 text-xs text-[var(--color-muted)]">
-            Parent relief, CPF top-up, etc. Widens the tax-free withdrawal band.
           </p>
         </div>
       </div>
@@ -346,8 +328,8 @@ export function SrsWithdrawalCard({ suggestedBalance, suggestedAltBalance }: { s
                 <span className="font-medium text-[var(--color-error)]">{sgd(optimal.overTaxFree)}</span>{" "}
                 above the tax-free ceiling, so the minimum possible tax is{" "}
                 <span className="font-semibold tabular-nums text-[var(--color-primary)]">{sgd(optimal.totalTax)}</span>{" "}
-                (even spread is provably optimal). To reach {sgd(0)} tax: lower other
-                income, add reliefs, or keep the withdrawn sum at or below{" "}
+                (even spread is provably optimal). To reach {sgd(0)} tax, keep the
+                withdrawn sum at or below{" "}
                 <span className="tabular-nums">{sgd(optimal.taxFreeCapacity)}</span>.
               </p>
             )}
