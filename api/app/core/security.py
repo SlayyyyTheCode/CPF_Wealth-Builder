@@ -10,8 +10,11 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.session import get_db
+from app.models.member import MemberProfile
 
 _bearer = HTTPBearer(auto_error=False)
 _ALGO = "HS256"
@@ -89,3 +92,50 @@ def optional_admin(
     except jwt.PyJWTError:
         return False
     return payload.get("role") == "admin"
+
+
+# ── per-client (member) access ───────────────────────────────────────────────
+def create_member_token(member_id: int) -> str:
+    """Short-lived token scoped to one member, issued on a correct password."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(member_id),
+        "role": "member",
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=_ALGO)
+
+
+def require_member_access(
+    member_id: int,
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> None:
+    """Guard a specific member's data. Open (password-less) profiles stay public;
+    protected ones require an admin token or this member's access token."""
+    m = db.get(MemberProfile, member_id)
+    if not m:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+    if not m.password_hash:
+        return  # open profile — public
+    if creds is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "This client is password-protected",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        payload = jwt.decode(creds.credentials, settings.JWT_SECRET, algorithms=[_ALGO])
+    except jwt.PyJWTError:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    role = payload.get("role")
+    if role == "admin":
+        return
+    if role == "member" and str(payload.get("sub")) == str(member_id):
+        return
+    raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized for this client")

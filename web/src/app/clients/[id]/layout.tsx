@@ -2,10 +2,8 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { getMember, warmClient, verifyMemberPassword, getToken } from "@/lib/api";
+import { getMember, warmClient, verifyMemberPassword } from "@/lib/api";
 import type { Member } from "@/lib/types";
-
-const unlockKey = (id: string) => `cpf_unlock_${id}`;
 
 export default function ClientLayout({
   children,
@@ -16,21 +14,18 @@ export default function ClientLayout({
 }) {
   const { id } = use(params);
   const [member, setMember] = useState<Member | null>(null);
-  const [unlocked, setUnlocked] = useState(false);
+  const [locked, setLocked] = useState(false);  // server returned 401 (protected)
   const [pw, setPw] = useState("");
   const [pwErr, setPwErr] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     let ok = true;
-    warmClient(Number(id));
-    const isAdmin = !!getToken();
-    const alreadyUnlocked =
-      typeof window !== "undefined" && sessionStorage.getItem(unlockKey(id)) === "1";
-    setUnlocked(isAdmin || alreadyUnlocked);
+    // The server gates protected profiles: an admin token or a stored member
+    // token unlocks it; otherwise getMember 401s and we show the password gate.
     getMember(Number(id))
-      .then((m) => ok && setMember(m))
-      .catch(() => {});
+      .then((m) => { if (!ok) return; setMember(m); warmClient(Number(id)); })
+      .catch((e) => { if (ok && String((e as Error).message).includes("401")) setLocked(true); });
     return () => { ok = false; };
   }, [id]);
 
@@ -41,8 +36,11 @@ export default function ClientLayout({
     try {
       const { ok } = await verifyMemberPassword(Number(id), pw);
       if (ok) {
-        sessionStorage.setItem(unlockKey(id), "1");
-        setUnlocked(true);
+        // token stored — re-fetch now that the call is authorized
+        const m = await getMember(Number(id));
+        setMember(m);
+        setLocked(false);
+        warmClient(Number(id));
       } else {
         setPwErr("Incorrect password.");
       }
@@ -53,10 +51,7 @@ export default function ClientLayout({
     }
   }
 
-  // Locked dashboard: password set, viewer is not admin, not yet unlocked.
-  const needGate = member?.has_password && !unlocked;
-
-  if (needGate) {
+  if (locked && !member) {
     return (
       <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-4">
         <form
@@ -65,7 +60,7 @@ export default function ClientLayout({
         >
           <h1 className="text-lg font-bold">🔒 Protected client</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
-            Enter the password to view {member?.name ?? "this client"}&apos;s dashboard.
+            Enter the password to view this client&apos;s dashboard.
           </p>
           <input
             type="password"
@@ -88,7 +83,8 @@ export default function ClientLayout({
           </div>
         </form>
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          App-level gate. Data is not encrypted server-side.
+          Server-enforced: the profile and its projections are not returned until
+          the password is verified.
         </p>
       </div>
     );

@@ -14,6 +14,7 @@ from app.engines.policy_resolver import make_db_resolver, fetch_active_snapshots
 from app.engines.serialize import serialize_result
 from app.engines.milestones import compute_milestones
 from app.engines.simulation import run_simulation
+from app.core.security import require_member_access
 from app.policy.medishield import premium_for_age
 from app.schemas.simulation import (
     SimulateRequest, SimulationRunOut, SimulationRunSummary,
@@ -82,7 +83,13 @@ def _balances_to_state(balances: dict) -> AccountState:
     response_model=SimulationRunOut,
     status_code=status.HTTP_200_OK,
 )
-def simulate(member_id: int, req: SimulateRequest, response: Response, db: Session = Depends(get_db)):
+def simulate(
+    member_id: int,
+    req: SimulateRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_member_access),
+):
     member = db.get(MemberProfile, member_id)
     if not member:
         raise HTTPException(404, "Member not found")

@@ -45,8 +45,15 @@ def test_update_member_public_but_special_access_admin_only(client, anon_client)
 
 def test_member_password_gate(anon_client):
     mid = anon_client.post("/members", json={**_member(), "password": "secret1"}).json()["id"]
-    assert anon_client.get(f"/members/{mid}").json()["has_password"] is True
-    assert anon_client.post(f"/members/{mid}/verify-password", json={"password": "secret1"}).json()["ok"] is True
+    # has_password is visible from the roster, but the profile itself is gated
+    rows = {r["id"]: r for r in anon_client.get("/members").json()}
+    assert rows[mid]["has_password"] is True
+    assert anon_client.get(f"/members/{mid}").status_code == 401  # protected
+    # correct password mints an access token that unlocks the profile
+    r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "secret1"})
+    assert r.json()["ok"] is True
+    tok = r.json()["token"]
+    assert anon_client.get(f"/members/{mid}", headers={"Authorization": f"Bearer {tok}"}).status_code == 200
     assert anon_client.post(f"/members/{mid}/verify-password", json={"password": "nope"}).json()["ok"] is False
 
 

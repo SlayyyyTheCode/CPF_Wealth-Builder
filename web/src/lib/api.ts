@@ -11,6 +11,14 @@ export const getToken = (): string | null =>
 export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+// Per-client access tokens (issued on a correct member password). sessionStorage
+// so they clear when the tab closes — a protected client must be re-unlocked.
+const MTOK_KEY = (id: number) => `cpf_mtok_${id}`;
+export const setMemberToken = (id: number, t: string) =>
+  typeof window !== "undefined" && sessionStorage.setItem(MTOK_KEY(id), t);
+export const getMemberToken = (id: number): string | null =>
+  typeof window === "undefined" ? null : sessionStorage.getItem(MTOK_KEY(id));
+
 // ── tiny client cache: reuse one projection/member/policy across tab switches ──
 const _cache = new Map<string, Promise<unknown>>();
 // Resolved values kept alongside the promise so a tab can read warm data
@@ -42,34 +50,36 @@ function invalidateMember(id: number) {
   invalidate("members");
 }
 
-function authHeaders(json = false): Record<string, string> {
+// Prefer the admin token (superuser); else fall back to the member-access token
+// for the client being addressed, so protected-profile calls carry their token.
+function authHeaders(json = false, memberId?: number): Record<string, string> {
   const h: Record<string, string> = {};
   if (json) h["Content-Type"] = "application/json";
-  const t = getToken();
+  const t = getToken() ?? (memberId != null ? getMemberToken(memberId) : null);
   if (t) h["Authorization"] = `Bearer ${t}`;
   return h;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: "no-store", headers: authHeaders() });
+export async function apiGet<T>(path: string, memberId?: number): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { cache: "no-store", headers: authHeaders(false, memberId) });
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+export async function apiPost<T>(path: string, body: unknown, memberId?: number): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: authHeaders(true),
+    headers: authHeaders(true, memberId),
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
-export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+export async function apiPut<T>(path: string, body: unknown, memberId?: number): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PUT",
-    headers: authHeaders(true),
+    headers: authHeaders(true, memberId),
     body: JSON.stringify(body),
   });
   if (res.status === 401) { clearToken(); throw new Error("Session expired — sign in as administrator again."); }
@@ -99,17 +109,17 @@ export const listMembers = () => cached("members", () => apiGet<MemberSummary[]>
 export const deleteMember = (id: number) =>
   apiDelete(`/members/${id}`).then(() => invalidateMember(id));
 export const getMember = (id: number) =>
-  cached(`member:${id}`, () => apiGet<Member>(`/members/${id}`));
+  cached(`member:${id}`, () => apiGet<Member>(`/members/${id}`, id));
 export const createMember = (m: NewMember) =>
   apiPost<Member>("/members", m).then((r) => { invalidate("members"); return r; });
 // Dashboard projections are read-only — persist:false skips the DB write. Cached
 // so switching tabs (Overview/Milestones/Medisave/SA) reuses one result.
 export const simulate = (id: number, end_age = 90) =>
   cached(`sim:${id}:${end_age}`, () =>
-    apiPost<SimRun>(`/members/${id}/simulate`, { end_age, persist: false }));
+    apiPost<SimRun>(`/members/${id}/simulate`, { end_age, persist: false }, id));
 export const getAnalysis = (id: number, body: Record<string, unknown> = {}) =>
   cached(`analysis:${id}:${JSON.stringify(body)}`, () =>
-    apiPost<Analysis>(`/members/${id}/analysis`, body));
+    apiPost<Analysis>(`/members/${id}/analysis`, body, id));
 
 // Synchronous warm-cache reads — let a page render with data already on its
 // first frame (set by warmClient on entering the client), skipping the loading
@@ -140,12 +150,15 @@ export const createSnapshot = (body: Record<string, unknown>) =>
 export const approveSnapshot = (id: number) =>
   apiPost<{ id: number; status: string }>(`/policy/snapshots/${id}/approve`, {});
 
-export const verifyMemberPassword = (id: number, password: string) =>
-  apiPost<{ ok: boolean }>(`/members/${id}/verify-password`, { password });
+export const verifyMemberPassword = async (id: number, password: string) => {
+  const r = await apiPost<{ ok: boolean; token?: string | null }>(`/members/${id}/verify-password`, { password });
+  if (r.ok && r.token) setMemberToken(id, r.token);  // unlock subsequent calls
+  return r;
+};
 export const updateMember = (id: number, body: MemberUpdate) =>
-  apiPut<Member>(`/members/${id}`, body).then((r) => { invalidateMember(id); return r; });
+  apiPut<Member>(`/members/${id}`, body, id).then((r) => { invalidateMember(id); return r; });
 export const simulateWhatIf = (id: number, body: Record<string, unknown>) =>
-  apiPost<SimRun>(`/members/${id}/simulate`, body);
+  apiPost<SimRun>(`/members/${id}/simulate`, body, id);
 export const taxEstimate = (income: number, deduction: number) =>
   apiPost<TaxEstimate>("/tax/estimate", { income, deduction });
 export const taxReliefCalc = (body: { income: number; rstu_self?: number; rstu_family?: number; voluntary_cpf?: number; srs_contribution?: number; residency?: Residency }) =>

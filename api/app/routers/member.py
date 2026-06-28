@@ -8,32 +8,39 @@ from app.models.simulation import SimulationRun
 from app.schemas.member import (
     MemberCreate, MemberOut, MemberSummaryOut, MemberUpdate, PasswordVerify,
 )
-from app.core.security import require_admin, optional_admin, hash_password, verify_password
+from app.core.security import (
+    require_admin, optional_admin, require_member_access,
+    hash_password, verify_password, create_member_token,
+)
 
 router = APIRouter(prefix="/members", tags=["members"])
 
 
 @router.get("", response_model=list[MemberSummaryOut])
-def list_members(db: Session = Depends(get_db)):
+def list_members(db: Session = Depends(get_db), is_admin: bool = Depends(optional_admin)):
     members = db.scalars(select(MemberProfile).order_by(MemberProfile.id)).all()
     out = []
     for m in members:
+        # Don't leak a protected client's balances/projection in the roster to
+        # non-admins — the card shows a locked state from has_password.
+        masked = bool(m.password_hash) and not is_admin
         bal = m.balances or {}
-        current_total = float(sum(bal.get(k, 0) for k in ("OA", "SA", "MA", "RA")))
-        run = db.scalars(
-            select(SimulationRun)
-            .where(SimulationRun.member_id == m.id)
-            .order_by(SimulationRun.id.desc())
-        ).first()
+        current_total = 0.0 if masked else float(sum(bal.get(k, 0) for k in ("OA", "SA", "MA", "RA")))
         latest = None
-        if run:
-            r = run.result or {}
-            cpf = r.get("cpf_life") or {}
-            latest = {
-                "readiness": r.get("readiness"),
-                "total_at_payout": r.get("ra_at_payout"),
-                "cpf_life_monthly": cpf.get("monthly_payout"),
-            }
+        if not masked:
+            run = db.scalars(
+                select(SimulationRun)
+                .where(SimulationRun.member_id == m.id)
+                .order_by(SimulationRun.id.desc())
+            ).first()
+            if run:
+                r = run.result or {}
+                cpf = r.get("cpf_life") or {}
+                latest = {
+                    "readiness": r.get("readiness"),
+                    "total_at_payout": r.get("ra_at_payout"),
+                    "cpf_life_monthly": cpf.get("monthly_payout"),
+                }
         out.append({
             "id": m.id, "name": m.name, "dob": m.dob,
             "employment_status": m.employment_status,
@@ -64,12 +71,18 @@ def verify_member_password(member_id: int, payload: PasswordVerify, db: Session 
     if not m:
         raise HTTPException(404, "Member not found")
     if not m.password_hash:
-        return {"ok": True}  # no password set → open
-    return {"ok": verify_password(payload.password, m.password_hash)}
+        return {"ok": True, "token": None}  # no password set → open
+    ok = verify_password(payload.password, m.password_hash)
+    # Issue a member-scoped access token only on success.
+    return {"ok": ok, "token": create_member_token(member_id) if ok else None}
 
 
 @router.get("/{member_id}", response_model=MemberOut)
-def get_member(member_id: int, db: Session = Depends(get_db)):
+def get_member(
+    member_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_member_access),
+):
     m = db.get(MemberProfile, member_id)
     if not m:
         raise HTTPException(404, "Member not found")
@@ -97,6 +110,7 @@ def update_member(
     payload: MemberUpdate,
     db: Session = Depends(get_db),
     is_admin: bool = Depends(optional_admin),
+    _: None = Depends(require_member_access),
 ):
     m = db.get(MemberProfile, member_id)
     if not m:

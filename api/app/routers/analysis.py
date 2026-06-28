@@ -13,6 +13,7 @@ from app.engines.policy_resolver import (
     make_db_resolver, fetch_active_snapshots, snapshot_to_policy, GrowthAssumptions,
 )
 from app.engines.simulation import run_simulation
+from app.core.security import require_member_access
 from app.engines.scenarios import (
     scenario_below_brs, scenario_property_pledge, scenario_ers_optimisation,
 )
@@ -39,7 +40,12 @@ def _balances_to_state(balances: dict) -> AccountState:
 
 
 @router.post("/members/{member_id}/analysis", response_model=AnalysisResponse)
-def analyse(member_id: int, req: AnalysisRequest, db: Session = Depends(get_db)):
+def analyse(
+    member_id: int,
+    req: AnalysisRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_member_access),
+):
     member = db.get(MemberProfile, member_id)
     if not member:
         raise HTTPException(404, "Member not found")
