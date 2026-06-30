@@ -59,6 +59,9 @@ export default function SaPage({
   // Top-up what-if (yearly) — computed client-side
   const [topup, setTopup] = useState<number>(0);
   const [topupAge, setTopupAge] = useState<number>(0);
+  // One-time OA -> SA transfer (irreversible; capped at FRS; earns 4% vs OA 2.5%)
+  const [transferAmt, setTransferAmt] = useState<number>(0);
+  const [transferAge, setTransferAge] = useState<number>(0);
   const [wiData, setWiData] = useState<
     { age: number; baseline: number; withTopup: number; frsLine: number }[] | null
   >(null);
@@ -84,6 +87,7 @@ export default function SaPage({
         if (simRun.result.years.length > 0) {
           setAge(simRun.result.years[0].age);
           setTopupAge(simRun.result.years[0].age);
+          setTransferAge(simRun.result.years[0].age);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -174,10 +178,15 @@ export default function SaPage({
     const data = years.map((y) => {
       const k = y.age - topupAge + 1; // yearly top-ups made by this age
       const fv = topup > 0 && k > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
+      // One-time OA -> SA transfer: a lump that compounds at the SA rate from
+      // the transfer age onward (it would have earned only 2.5% left in OA).
+      const tk = y.age - transferAge; // years since the transfer
+      const transferFv =
+        transferAmt > 0 && tk >= 0 ? transferAmt * (1 + SA_RATE) ** tk : 0;
       return {
         age: y.age,
         baseline: retBal(y),
-        withTopup: retBal(y) + fv,
+        withTopup: retBal(y) + fv + transferFv,
         frsLine: Math.round(proj(frs, y.year)),
       };
     });
@@ -395,16 +404,57 @@ export default function SaPage({
               aria-label="Age at which yearly top-ups begin"
             />
           </div>
+          <div className="hidden sm:block" />
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label htmlFor="sa-transfer" className="mb-1 block text-sm text-[var(--color-muted)]">
+              OA → SA transfer (S$)
+            </label>
+            <input
+              id="sa-transfer"
+              type="number"
+              min={0}
+              step={1000}
+              value={transferAmt || ""}
+              placeholder="0"
+              onChange={(e) => setTransferAmt(Math.max(0, Number(e.target.value)))}
+              className={inputClass}
+              aria-label="One-time OA to SA transfer amount in Singapore dollars"
+            />
+          </div>
+          <div>
+            <label htmlFor="sa-transfer-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Transfer at age
+            </label>
+            <input
+              id="sa-transfer-age"
+              type="number"
+              min={ages[0]}
+              max={ages[ages.length - 1]}
+              step={1}
+              value={transferAge}
+              onChange={(e) => setTransferAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              className={inputClass}
+              aria-label="Age at which the OA to SA transfer is made"
+            />
+          </div>
           <div className="flex items-end">
             <button
               onClick={runWhatIf}
               className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
-              aria-label="Recalculate with yearly top-up"
+              aria-label="Recalculate with top-up and transfer"
             >
               Recalculate
             </button>
           </div>
         </div>
+
+        <p className="mt-2 text-xs text-[var(--color-muted)]">
+          OA → SA transfers are irreversible and capped at the FRS, but the moved
+          funds earn 4% in SA instead of 2.5% in OA.
+        </p>
 
         {wiData && (
           <div
@@ -425,7 +475,7 @@ export default function SaPage({
             {/* FRS hit age — with top-up */}
             <div>
               <p className="text-xs text-[var(--color-muted)]">
-                FRS hit age (with top-up)
+                FRS hit age (with changes)
               </p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
                 {wiFrsAge !== null ? `Age ${wiFrsAge}` : "Not reached"}
@@ -450,7 +500,7 @@ export default function SaPage({
             {/* Final retirement balance — with top-up */}
             <div>
               <p className="text-xs text-[var(--color-muted)]">
-                Final balance (with top-up)
+                Final balance (with changes)
               </p>
               <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
                 {sgd(wiFinalBal)}
@@ -467,7 +517,7 @@ export default function SaPage({
         {wiData && (
           <div
             role="img"
-            aria-label="Projected SA/RA balance: baseline versus with yearly top-up"
+            aria-label="Projected SA/RA balance: baseline versus with top-up and OA-SA transfer"
             className="mt-4 h-64"
           >
             <ResponsiveContainer width="100%" height="100%">
@@ -482,12 +532,12 @@ export default function SaPage({
                 <Tooltip
                   formatter={(v, name) => [
                     sgd(typeof v === "number" ? v : null),
-                    name === "baseline" ? "Baseline" : name === "withTopup" ? "With yearly top-up" : "FRS",
+                    name === "baseline" ? "Baseline" : name === "withTopup" ? "With top-up & transfer" : "FRS",
                   ]}
                   labelFormatter={(a) => `Age ${a}`}
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
-                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With yearly top-up" : "FRS (projected)")} wrapperStyle={{ fontSize: "12px" }} />
+                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With top-up & transfer" : "FRS (projected)")} wrapperStyle={{ fontSize: "12px" }} />
                 <Line isAnimationActive={false} type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
                 <Line isAnimationActive={false} type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
                 <Line isAnimationActive={false} type="monotone" dataKey="frsLine" stroke="var(--chart-3)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
