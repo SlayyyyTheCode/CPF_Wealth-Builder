@@ -226,30 +226,42 @@ export default function MedisavePage({
         <YearScrubber ages={ages} value={age} onChange={setAge} />
       </div>
 
-      {/* 3. Per-year KPI row — Current MA → interest → est. extra → end-of-year */}
+      {/* 3. Per-year KPIs — two grouped boxes */}
       {yr && ms && (
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-4 grid gap-4 lg:grid-cols-2">
+          {/* Start / end of year */}
           <div className={cardClass}>
-            <p className={labelClass}>Current MA</p>
-            <p className={kpiClass}>{sgd(maOpening)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">start of year</p>
+            <p className={`${labelClass} mb-3`}>Start/End Account of the Year</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">Current MA</p>
+                <p className={kpiClass}>{sgd(maOpening)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">start of year</p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">End of the year MA balance</p>
+                <p className={`${kpiClass} text-[var(--color-primary)]`}>{sgd(maBalance)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
+              </div>
+            </div>
           </div>
+          {/* Interest earned */}
           <div className={cardClass}>
-            <p className={labelClass}>MA interest earned</p>
-            <p className={kpiClass}>{sgd(maInterest)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">this year (base 4% + extra)</p>
-          </div>
-          <div className={cardClass}>
-            <p className={labelClass}>Est. extra interest</p>
-            <p className={kpiClass}>{sgd(maExtra)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">
-              {age >= 55 ? "+2%/+1% on first $60k band" : "+1% on first $60k band"}
-            </p>
-          </div>
-          <div className={cardClass}>
-            <p className={labelClass}>End of the year MA balance</p>
-            <p className={kpiClass}>{sgd(maBalance)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
+            <p className={`${labelClass} mb-3`}>Interest earned of this Year</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">MA interest earned</p>
+                <p className={kpiClass}>{sgd(maInterest)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">base 4% + extra</p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">Est. extra interest</p>
+                <p className={kpiClass}>{sgd(maExtra)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">
+                  {age >= 55 ? "+2%/+1% on first $60k band" : "+1% on first $60k band"}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}

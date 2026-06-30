@@ -210,32 +210,44 @@ export default function SaPage({
         <YearScrubber ages={ages} value={age} onChange={setAge} />
       </div>
 
-      {/* 3. KPI grid — Current SA → interest → est. extra → end-of-year */}
+      {/* 3. Per-year KPIs — two grouped boxes */}
       {yr && (
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-4 grid gap-4 lg:grid-cols-2">
+          {/* Start / end of year */}
           <div className={cardClass}>
-            <p className={labelClass}>Current SA</p>
-            <p className={kpiClass}>{sgd(openRetBal)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">
-              start of year · {yr.closing.RA > 0 ? "RA (post-55)" : "SA (pre-55)"}
-            </p>
+            <p className={`${labelClass} mb-3`}>Start/End Account of the Year</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">Current SA</p>
+                <p className={kpiClass}>{sgd(openRetBal)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">
+                  start of year · {yr.closing.RA > 0 ? "RA (post-55)" : "SA (pre-55)"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">End of the year SA balance</p>
+                <p className={`${kpiClass} text-[var(--color-primary)]`}>{sgd(curRetBal)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
+              </div>
+            </div>
           </div>
+          {/* Interest earned */}
           <div className={cardClass}>
-            <p className={labelClass}>SA interest earned</p>
-            <p className={kpiClass}>{sgd(curRetInt)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">this year (base 4% + extra)</p>
-          </div>
-          <div className={cardClass}>
-            <p className={labelClass}>Est. extra interest</p>
-            <p className={kpiClass}>{sgd(saExtra)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">
-              {age >= 55 ? "+2%/+1% on first $60k band" : "+1% on first $60k band"}
-            </p>
-          </div>
-          <div className={cardClass}>
-            <p className={labelClass}>End of the year SA balance</p>
-            <p className={kpiClass}>{sgd(curRetBal)}</p>
-            <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
+            <p className={`${labelClass} mb-3`}>Interest earned of this Year</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">SA interest earned</p>
+                <p className={kpiClass}>{sgd(curRetInt)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">base 4% + extra</p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">Est. extra interest</p>
+                <p className={kpiClass}>{sgd(saExtra)}</p>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">
+                  {age >= 55 ? "+2%/+1% on first $60k band" : "+1% on first $60k band"}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}
