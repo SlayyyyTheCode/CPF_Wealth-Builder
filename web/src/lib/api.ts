@@ -11,13 +11,12 @@ export const getToken = (): string | null =>
 export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
-// Per-client access tokens (issued on a correct member password). sessionStorage
-// so they clear when the tab closes — a protected client must be re-unlocked.
-const MTOK_KEY = (id: number) => `cpf_mtok_${id}`;
-export const setMemberToken = (id: number, t: string) =>
-  typeof window !== "undefined" && sessionStorage.setItem(MTOK_KEY(id), t);
-export const getMemberToken = (id: number): string | null =>
-  typeof window === "undefined" ? null : sessionStorage.getItem(MTOK_KEY(id));
+// Per-client access tokens (issued on a correct member password). Held only in
+// memory — wiped on a page refresh/reload, so a protected client must re-enter
+// its password every time the page is reloaded.
+const _memberTokens = new Map<number, string>();
+export const setMemberToken = (id: number, t: string) => { _memberTokens.set(id, t); };
+export const getMemberToken = (id: number): string | null => _memberTokens.get(id) ?? null;
 
 // ── tiny client cache: reuse one projection/member/policy across tab switches ──
 const _cache = new Map<string, Promise<unknown>>();

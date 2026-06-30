@@ -6,7 +6,7 @@ import {
 import { simulate, getMember, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
-import { PageHeading, OrdinaryIcon, HousingIcon, RocketIcon } from "@/components/icons";
+import { PageHeading, OrdinaryIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
 
@@ -32,22 +32,6 @@ export default function OaPage({
   const [member, setMember] = useState<Member | null>(() => peekMember(Number(id)));
   const [owCeiling, setOwCeiling] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
-
-  // Housing-withdrawal calculator state (monthly mortgage draw)
-  const [oaNow, setOaNow] = useState(0);            // current OA balance
-  const [withdrawMth, setWithdrawMth] = useState(0); // monthly amount drawn (housing)
-  const [drawYears, setDrawYears] = useState(10);
-  const [drawMonths, setDrawMonths] = useState(0);
-  const [drawRate, setDrawRate] = useState(OA_RATE * 100);
-  const [drawResult, setDrawResult] = useState<
-    {
-      projected: number;
-      withdrawn: number;
-      interest: number;
-      months: number;
-      series: { age: number; oa: number; oaAfter: number | null }[];
-    } | null
-  >(null);
 
   // Top-up what-if (yearly OA voluntary contribution from a chosen age)
   const [topup, setTopup] = useState<number>(0);
@@ -77,12 +61,10 @@ export default function OaPage({
         setRes(r.result);
         setMember(m);
         setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
-        // Prefill the housing calculators from the client's monthly mortgage.
-        setWithdrawMth(Math.max(0, Math.round(m.housing_data?.monthly_mortgage ?? 0)));
+        // Prefill the monthly mortgage from the client's profile.
         setMortgageMth(Math.max(0, Math.round(m.housing_data?.monthly_mortgage ?? 0)));
         if (r.result.years.length > 0) {
           setAge(r.result.years[0].age);
-          setOaNow(Math.round(r.result.years[0].closing.OA));
           setTopupAge(r.result.years[0].age);
           setMortgageAge(r.result.years[0].age);
         }
@@ -158,36 +140,6 @@ export default function OaPage({
   const oaMonthlyIn = oaAnnualIn / 12;
   const cappedWage = Math.min(member.monthly_gross_wage, owCeiling > 0 ? owCeiling : member.monthly_gross_wage);
 
-  // Housing-withdrawal calculator — monthly mortgage draw, compounded monthly.
-  function calcWithdrawal() {
-    const rm = drawRate / 100 / 12;
-    const months = Math.max(drawYears * 12 + drawMonths, 0);
-    const startAge = years[0].age;
-    let bal = oaNow;
-    let withdrawn = 0;
-    const byAge: Record<number, number> = { [startAge]: Math.round(bal) };
-    for (let m = 1; m <= months; m++) {
-      bal = bal * (1 + rm);
-      const w = Math.min(withdrawMth, bal);
-      bal -= w;
-      withdrawn += w;
-      if (m % 12 === 0) byAge[startAge + m / 12] = Math.round(bal);
-    }
-    byAge[startAge + Math.ceil(months / 12)] = Math.round(bal); // final partial year
-    const series = years.map((y) => ({
-      age: y.age,
-      oa: Math.round(y.closing.OA),
-      oaAfter: y.age in byAge ? byAge[y.age] : null,
-    }));
-    setDrawResult({
-      projected: bal,
-      withdrawn,
-      interest: bal + withdrawn - oaNow,
-      months,
-      series,
-    });
-  }
-
   // Yearly OA top-up from a chosen age, compounded at the OA floor (~2.5%/yr).
   // Estimate layered on the baseline projection; FV after k top-ups =
   // topup * ((1+r)^k - 1)/r where k = years since the chosen start age.
@@ -218,7 +170,7 @@ export default function OaPage({
       <PageHeading
         icon={<OrdinaryIcon className="h-7 w-7" />}
         title="Ordinary Account (OA)"
-        subtitle="OA balance and 2.5% interest over time, extra interest, the move into RA at 55, and a housing-withdrawal calculator."
+        subtitle="OA balance and 2.5% interest over time, extra interest, the move into RA at 55, and the impact of a monthly housing mortgage."
       />
 
       {/* 2. Year scrubber + monthly mortgage control */}
@@ -394,167 +346,6 @@ export default function OaPage({
         <p className="mt-3 text-xs text-[var(--color-muted)]">
           At 55 the SA closes and merges into the new Retirement Account. SA is used first; if the
           Full Retirement Sum is not yet met, OA tops it up. Any remaining OA stays in the OA.
-        </p>
-      </div>
-
-      {/* 7. Housing-withdrawal calculator */}
-      <div className={`${cardClass} mb-4`}>
-        <h3 className={`${labelClass} mb-4 flex items-center gap-2`}>
-          <HousingIcon className="h-5 w-5" />
-          OA housing-withdrawal calculator
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <div>
-            <label htmlFor="oa-now" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Current OA balance (S$)
-            </label>
-            <input
-              id="oa-now"
-              type="number"
-              min={0}
-              step={100}
-              value={oaNow}
-              onChange={(e) => setOaNow(Math.max(0, Number(e.target.value)))}
-              className={inputClass}
-              aria-label="Current Ordinary Account balance"
-            />
-          </div>
-          <div>
-            <label htmlFor="oa-withdraw" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Withdraw for housing (S$/mth)
-            </label>
-            <input
-              id="oa-withdraw"
-              type="number"
-              min={0}
-              step={50}
-              value={withdrawMth || ""}
-              placeholder="0"
-              onChange={(e) => setWithdrawMth(Math.max(0, Number(e.target.value)))}
-              className={inputClass}
-              aria-label="Monthly amount withdrawn from OA for housing"
-            />
-          </div>
-          <div>
-            <label htmlFor="oa-draw-years" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Years
-            </label>
-            <input
-              id="oa-draw-years"
-              type="number"
-              min={0}
-              max={50}
-              step={1}
-              value={drawYears}
-              onChange={(e) => setDrawYears(Math.max(0, Math.min(50, Number(e.target.value))))}
-              className={inputClass}
-              aria-label="Number of whole years to project"
-            />
-          </div>
-          <div>
-            <label htmlFor="oa-draw-months" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Months
-            </label>
-            <input
-              id="oa-draw-months"
-              type="number"
-              min={0}
-              max={11}
-              step={1}
-              value={drawMonths || ""}
-              placeholder="0"
-              onChange={(e) => setDrawMonths(Math.max(0, Math.min(11, Number(e.target.value))))}
-              className={inputClass}
-              aria-label="Additional months to project"
-            />
-          </div>
-          <div>
-            <label htmlFor="oa-draw-rate" className="mb-1 block text-sm text-[var(--color-muted)]">
-              OA interest rate (%)
-            </label>
-            <input
-              id="oa-draw-rate"
-              type="number"
-              min={0}
-              max={20}
-              step={0.1}
-              value={drawRate}
-              onChange={(e) => setDrawRate(Math.max(0, Math.min(20, Number(e.target.value))))}
-              className={inputClass}
-              aria-label="Annual OA interest rate in percent"
-            />
-          </div>
-        </div>
-
-        <button
-          onClick={calcWithdrawal}
-          className="mt-4 rounded-full bg-[var(--color-primary)] px-5 py-2 text-sm font-semibold text-white hover:bg-[var(--color-primary-hover)]"
-        >
-          Calculate
-        </button>
-
-        {drawResult && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
-          >
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">Total withdrawn for housing</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.withdrawn)}</p>
-              <p className="text-xs text-[var(--color-muted)]">over {drawResult.months} mth{drawResult.months === 1 ? "" : "s"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">Projected OA at end</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(drawResult.projected)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">OA interest earned</p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
-                {sgd(drawResult.interest)}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {drawResult && (
-          <div
-            role="img"
-            aria-label="OA balance versus OA balance after housing withdrawal by age"
-            className="mt-4 h-64"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={drawResult.series} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
-                <YAxis
-                  tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
-                  tick={{ fontSize: 11, fill: "var(--color-muted)" }}
-                  width={52}
-                />
-                <Tooltip
-                  formatter={(v, name) => [
-                    sgd(typeof v === "number" ? v : null),
-                    name === "oa" ? "OA balance" : "OA after withdrawal",
-                  ]}
-                  labelFormatter={(a) => `Age ${a}`}
-                  contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
-                />
-                <Legend
-                  formatter={(v) => (v === "oa" ? "OA balance" : "OA after withdrawal")}
-                  wrapperStyle={{ fontSize: "12px" }}
-                />
-                <Line isAnimationActive={false} type="monotone" dataKey="oa" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
-                <Line isAnimationActive={false} type="monotone" dataKey="oaAfter" stroke="var(--chart-3)" strokeWidth={2.5} dot={false} connectNulls />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        <p className="mt-2 text-xs text-[var(--color-muted)]">
-          Draws the monthly housing amount from the OA each month, compounding the remaining balance
-          monthly at the rate above over the chosen years and months. Prefilled with the current OA
-          balance — edit any field, then Calculate.
         </p>
       </div>
 
