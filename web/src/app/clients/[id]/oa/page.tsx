@@ -56,6 +56,14 @@ export default function OaPage({
     { age: number; baseline: number; withTopup: number }[] | null
   >(null);
 
+  // Monthly housing mortgage — diverts OA inflow each year, so the OA path and
+  // its forgone interest shrink. Floored at $0 (can't pay more than the OA has).
+  const [mortgageMth, setMortgageMth] = useState<number>(0);
+  const [mortgageAge, setMortgageAge] = useState<number>(0);
+  const [mortgageData, setMortgageData] = useState<
+    { age: number; baseline: number; oaAfter: number }[] | null
+  >(null);
+
   // Scrubber state — seed from warm cache so the page paints fully on tab switch.
   const [age, setAge] = useState<number | null>(() => peekSim(Number(id))?.result.years[0]?.age ?? null);
 
@@ -72,12 +80,14 @@ export default function OaPage({
         setRes(r.result);
         setMember(m);
         setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
-        // Prefill the housing-withdrawal calculator from the client's monthly mortgage.
+        // Prefill the housing calculators from the client's monthly mortgage.
         setWithdrawMth(Math.max(0, Math.round(m.housing_data?.monthly_mortgage ?? 0)));
+        setMortgageMth(Math.max(0, Math.round(m.housing_data?.monthly_mortgage ?? 0)));
         if (r.result.years.length > 0) {
           setAge(r.result.years[0].age);
           setOaNow(Math.round(r.result.years[0].closing.OA));
           setTopupAge(r.result.years[0].age);
+          setMortgageAge(r.result.years[0].age);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -169,6 +179,24 @@ export default function OaPage({
       };
     });
     setWiData(data);
+  }
+
+  // Monthly housing mortgage paid out of OA inflow from `mortgageAge`. Each year
+  // diverts 12 x mortgage that would otherwise stay in OA and compound at 2.5%,
+  // so the reduction grows as an annuity. OA after = baseline - reduction, ≥ 0.
+  function runMortgage() {
+    const annual = mortgageMth * 12;
+    const data = years.map((y) => {
+      const k = y.age - mortgageAge + 1; // yearly mortgage outflows by this age
+      const reduction =
+        mortgageMth > 0 && k > 0 ? annual * (((1 + OA_RATE) ** k - 1) / OA_RATE) : 0;
+      return {
+        age: y.age,
+        baseline: Math.round(y.closing.OA),
+        oaAfter: Math.max(0, Math.round(y.closing.OA - reduction)),
+      };
+    });
+    setMortgageData(data);
   }
 
 
@@ -582,6 +610,123 @@ export default function OaPage({
           Estimate: starting at the chosen age, each year&apos;s voluntary OA top-up is compounded at
           the 2.5% OA floor rate and added to the projected balance.
         </p>
+      </div>
+
+      {/* 8b. Monthly housing mortgage */}
+      <div className={`${cardClass} mb-4`}>
+        <h3 className={`${labelClass} mb-1`}>Monthly Housing Mortgage (SGD)</h3>
+        <p className="mb-4 text-xs text-[var(--color-muted)]">
+          Each month the mortgage is paid out of OA inflow; the rest stays in OA and
+          keeps earning 2.5%. Larger mortgages divert more contributions, so the OA
+          path (and its compounding) shrinks — floored at $0.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <label htmlFor="oa-mortgage" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Monthly mortgage (S$)
+            </label>
+            <input
+              id="oa-mortgage"
+              type="number"
+              min={0}
+              step={100}
+              value={mortgageMth || ""}
+              placeholder="0"
+              onChange={(e) => setMortgageMth(Math.max(0, Number(e.target.value)))}
+              className={inputClass}
+              aria-label="Monthly housing mortgage paid from OA"
+            />
+          </div>
+          <div>
+            <label htmlFor="oa-mortgage-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Start at age
+            </label>
+            <input
+              id="oa-mortgage-age"
+              type="number"
+              min={ages[0]}
+              max={ages[ages.length - 1]}
+              step={1}
+              value={mortgageAge}
+              onChange={(e) => setMortgageAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              className={inputClass}
+              aria-label="Age at which mortgage payments begin"
+            />
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={runMortgage}
+              className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
+              aria-label="Recalculate with monthly mortgage"
+            >
+              Recalculate
+            </button>
+          </div>
+        </div>
+
+        {mortgageData && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
+          >
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Final OA (baseline)</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">
+                {sgd(mortgageData[mortgageData.length - 1].baseline)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Final OA (after mortgage)</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                {sgd(mortgageData[mortgageData.length - 1].oaAfter)}
+              </p>
+              <p className="text-xs text-[var(--color-error)]">
+                −{sgd(mortgageData[mortgageData.length - 1].baseline - mortgageData[mortgageData.length - 1].oaAfter)} delta
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">OA depleted</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">
+                {(() => {
+                  const d = mortgageData.find((r) => r.oaAfter <= 0);
+                  return d ? `Age ${d.age}` : "Never";
+                })()}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {mortgageData && (
+          <div
+            role="img"
+            aria-label="Projected OA balance: baseline versus after monthly mortgage"
+            className="mt-4 h-64"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={mortgageData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                <YAxis
+                  tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                  tick={{ fontSize: 11, fill: "var(--color-muted)" }}
+                  width={52}
+                />
+                <Tooltip
+                  formatter={(v, name) => [
+                    sgd(typeof v === "number" ? v : null),
+                    name === "baseline" ? "Baseline" : "After mortgage",
+                  ]}
+                  labelFormatter={(a) => `Age ${a}`}
+                  contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
+                />
+                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : "After mortgage")} wrapperStyle={{ fontSize: "12px" }} />
+                <Line isAnimationActive={false} type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="oaAfter" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
 
       {/* 9. Allocation note */}
