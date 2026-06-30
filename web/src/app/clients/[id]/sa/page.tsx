@@ -63,8 +63,12 @@ export default function SaPage({
   const [transferAmt, setTransferAmt] = useState<number>(0);
   const [transferAge, setTransferAge] = useState<number>(0);
   const [wiData, setWiData] = useState<
-    { age: number; baseline: number; withTopup: number; frsLine: number }[] | null
+    {
+      age: number; baseline: number; withTopup: number;
+      opening: number; interest: number; frsLine: number; ersLine: number;
+    }[] | null
   >(null);
+  const [wiAge, setWiAge] = useState<number>(0); // scenario scrubber
 
   useEffect(() => {
     let ok = true;
@@ -149,14 +153,28 @@ export default function SaPage({
     .filter((y) => y.age <= age)
     .reduce((s, y) => s + (y.overflow_out?.ma_to_sa ?? 0), 0);
 
-  // Baseline FRS-hit age (against that year's projected FRS)
+  // Baseline FRS/ERS-hit ages (against that year's projected sum)
   const baseFrsAge = years.find((y) => retBal(y) >= proj(frs, y.year))?.age ?? null;
+  const baseErsAge = years.find((y) => retBal(y) >= proj(ers, y.year))?.age ?? null;
 
-  // What-if derived (yearly top-up estimate)
+  // What-if scenario: hit ages + the KPI set for the selected scenario year.
   const wiFrsAge = wiData ? (wiData.find((d) => d.withTopup >= d.frsLine)?.age ?? null) : null;
+  const wiErsAge = wiData ? (wiData.find((d) => d.withTopup >= d.ersLine)?.age ?? null) : null;
   const wiFinalBal = wiData ? wiData[wiData.length - 1].withTopup : null;
-  const baseFinalBal =
-    years.length > 0 ? retBal(years[years.length - 1]) : null;
+  const baseFinalBal = years.length > 0 ? retBal(years[years.length - 1]) : null;
+
+  const wiAges = wiData ? wiData.map((d) => d.age) : [];
+  const wiSel = wiData ? wiData.find((d) => d.age === wiAge) ?? null : null;
+  const wiYr = wiData ? years.find((y) => y.age === wiAge) ?? null : null;
+  // Scenario extra-interest: put the scenario balance into SA (pre-55) or RA.
+  const wiExtra = (() => {
+    if (!wiSel || !wiYr) return 0;
+    const closing = { ...wiYr.closing, ...(wiAge >= 55 ? { RA: wiSel.withTopup } : { SA: wiSel.withTopup }) };
+    const e = extraInterestByAccount(closing, wiAge);
+    return e.SA + e.RA;
+  })();
+  const wiNeededFrs = wiSel ? Math.max(0, wiSel.frsLine - wiSel.withTopup) : 0;
+  const wiNeededErs = wiSel ? Math.max(0, wiSel.ersLine - wiSel.withTopup) : 0;
 
   // ── styles ─────────────────────────────────────────────────────────────────
 
@@ -174,23 +192,33 @@ export default function SaPage({
   // `topup`; value after k years = topup * (((1+r)^k - 1)/r). Estimate layered
   // on the baseline projection.
   const SA_RATE = 0.04;
+  // Value the scenario adds over baseline at the *end* of a given age: yearly
+  // top-ups (annuity) + one-time transfer (lump), each compounded at ~4%.
+  function scenarioExtra(atAge: number): number {
+    const k = atAge - topupAge + 1;
+    const topupFv = topup > 0 && k > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
+    const tk = atAge - transferAge;
+    const transferFv = transferAmt > 0 && tk >= 0 ? transferAmt * (1 + SA_RATE) ** tk : 0;
+    return topupFv + transferFv;
+  }
   function runWhatIf() {
     const data = years.map((y) => {
-      const k = y.age - topupAge + 1; // yearly top-ups made by this age
-      const fv = topup > 0 && k > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
-      // One-time OA -> SA transfer: a lump that compounds at the SA rate from
-      // the transfer age onward (it would have earned only 2.5% left in OA).
-      const tk = y.age - transferAge; // years since the transfer
-      const transferFv =
-        transferAmt > 0 && tk >= 0 ? transferAmt * (1 + SA_RATE) ** tk : 0;
+      const extraEnd = scenarioExtra(y.age);
+      const extraStart = scenarioExtra(y.age - 1); // = extra at end of prior year
+      const baseClose = retBal(y);
       return {
         age: y.age,
-        baseline: retBal(y),
-        withTopup: retBal(y) + fv + transferFv,
+        baseline: baseClose,
+        withTopup: baseClose + extraEnd,
+        opening: retBalOpening(y) + extraStart,
+        // baseline SA/RA interest + interest earned on the extra pot held all year
+        interest: retInt(y) + SA_RATE * extraStart,
         frsLine: Math.round(proj(frs, y.year)),
+        ersLine: Math.round(proj(ers, y.year)),
       };
     });
     setWiData(data);
+    setWiAge(data[0]?.age ?? 0);
   }
 
   // ── render ─────────────────────────────────────────────────────────────────
@@ -469,61 +497,116 @@ export default function SaPage({
         </p>
 
         {wiData && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-2 lg:grid-cols-4"
-          >
-            {/* FRS hit age — baseline */}
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">
-                FRS hit age (baseline)
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">
-                {baseFrsAge !== null ? `Age ${baseFrsAge}` : "Not reached"}
-              </p>
-            </div>
-
-            {/* FRS hit age — with top-up */}
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">
-                FRS hit age (with changes)
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
-                {wiFrsAge !== null ? `Age ${wiFrsAge}` : "Not reached"}
-              </p>
-              {baseFrsAge !== null && wiFrsAge !== null && wiFrsAge < baseFrsAge && (
-                <p className="text-xs text-[var(--color-primary)]">
-                  {baseFrsAge - wiFrsAge} yr{baseFrsAge - wiFrsAge > 1 ? "s" : ""} earlier
+          <>
+            {/* Headline: when FRS/ERS are hit under the scenario vs baseline */}
+            <div className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">FRS hit age</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                  {wiFrsAge !== null ? `Age ${wiFrsAge}` : "Not reached"}
                 </p>
-              )}
-            </div>
-
-            {/* Final retirement balance — baseline */}
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">
-                Final balance (baseline)
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums">
-                {sgd(baseFinalBal)}
-              </p>
-            </div>
-
-            {/* Final retirement balance — with top-up */}
-            <div>
-              <p className="text-xs text-[var(--color-muted)]">
-                Final balance (with changes)
-              </p>
-              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
-                {sgd(wiFinalBal)}
-              </p>
-              {baseFinalBal !== null && wiFinalBal !== null && (
-                <p className="text-xs text-[var(--color-primary)]">
-                  +{sgd(wiFinalBal - baseFinalBal)} delta
+                <p className="text-xs text-[var(--color-muted)]">
+                  baseline {baseFrsAge !== null ? `age ${baseFrsAge}` : "—"}
+                  {baseFrsAge !== null && wiFrsAge !== null && wiFrsAge < baseFrsAge
+                    ? ` · ${baseFrsAge - wiFrsAge} yr earlier` : ""}
                 </p>
-              )}
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">ERS hit age</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                  {wiErsAge !== null ? `Age ${wiErsAge}` : "Not reached"}
+                </p>
+                <p className="text-xs text-[var(--color-muted)]">
+                  baseline {baseErsAge !== null ? `age ${baseErsAge}` : "—"}
+                  {baseErsAge !== null && wiErsAge !== null && wiErsAge < baseErsAge
+                    ? ` · ${baseErsAge - wiErsAge} yr earlier` : ""}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">Final balance</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                  {sgd(wiFinalBal)}
+                </p>
+                {baseFinalBal !== null && wiFinalBal !== null && (
+                  <p className="text-xs text-[var(--color-muted)]">+{sgd(wiFinalBal - baseFinalBal)} vs baseline</p>
+                )}
+              </div>
             </div>
-          </div>
+
+            {/* Scenario year scrubber */}
+            <div className="mt-4">
+              <p className={`${labelClass} mb-2`}>Scenario year</p>
+              <YearScrubber ages={wiAges} value={wiAge} onChange={setWiAge} />
+            </div>
+
+            {/* Scenario KPI boxes for the selected year */}
+            {wiSel && wiYr && (
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className={cardClass}>
+                  <p className={`${labelClass} mb-3`}>Start/End Account of the Year</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">Current (scenario)</p>
+                      <p className={kpiClass}>{sgd(wiSel.opening)}</p>
+                      <p className="mt-1 text-xs text-[var(--color-muted)]">start of year</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">End of year (scenario)</p>
+                      <p className={`${kpiClass} text-[var(--color-primary)]`}>{sgd(wiSel.withTopup)}</p>
+                      <p className="mt-1 text-xs text-[var(--color-muted)]">closing balance</p>
+                    </div>
+                  </div>
+                </div>
+                <div className={cardClass}>
+                  <p className={`${labelClass} mb-3`}>Interest earned of this Year</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">SA interest earned</p>
+                      <p className={kpiClass}>{sgd(wiSel.interest)}</p>
+                      <p className="mt-1 text-xs text-[var(--color-muted)]">base 4% + extra</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">Est. extra interest</p>
+                      <p className={kpiClass}>{sgd(wiExtra)}</p>
+                      <p className="mt-1 text-xs text-[var(--color-muted)]">
+                        {wiAge >= 55 ? "+2%/+1% on first $60k band" : "+1% on first $60k band"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className={cardClass}>
+                  <p className={`${labelClass} mb-3`}>Retirement-sum targets (Year {wiYr.year})</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">FRS target for Year {wiYr.year}</p>
+                      <p className={kpiClass}>{sgd(wiSel.frsLine)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">ERS target for Year {wiYr.year}</p>
+                      <p className={kpiClass}>{sgd(wiSel.ersLine)}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className={cardClass}>
+                  <p className={`${labelClass} mb-3`}>Still needed (scenario)</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">Needed to hit FRS</p>
+                      <p className={`${kpiClass} ${wiNeededFrs === 0 ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
+                        {wiNeededFrs === 0 ? "Reached ✓" : sgd(wiNeededFrs)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[var(--color-muted)]">Needed to hit ERS</p>
+                      <p className={`${kpiClass} ${wiNeededErs === 0 ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
+                        {wiNeededErs === 0 ? "Reached ✓" : sgd(wiNeededErs)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {wiData && (
@@ -544,15 +627,18 @@ export default function SaPage({
                 <Tooltip
                   formatter={(v, name) => [
                     sgd(typeof v === "number" ? v : null),
-                    name === "baseline" ? "Baseline" : name === "withTopup" ? "With top-up & transfer" : "FRS",
+                    name === "baseline" ? "Baseline"
+                      : name === "withTopup" ? "With top-up & transfer"
+                      : name === "ersLine" ? "ERS" : "FRS",
                   ]}
                   labelFormatter={(a) => `Age ${a}`}
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
-                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With top-up & transfer" : "FRS (projected)")} wrapperStyle={{ fontSize: "12px" }} />
+                <Legend formatter={(v) => (v === "baseline" ? "Baseline" : v === "withTopup" ? "With top-up & transfer" : v === "ersLine" ? "ERS (projected)" : "FRS (projected)")} wrapperStyle={{ fontSize: "12px" }} />
                 <Line isAnimationActive={false} type="monotone" dataKey="baseline" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
                 <Line isAnimationActive={false} type="monotone" dataKey="withTopup" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
                 <Line isAnimationActive={false} type="monotone" dataKey="frsLine" stroke="var(--chart-3)" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="ersLine" stroke="var(--chart-4)" strokeWidth={1.5} strokeDasharray="2 3" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
