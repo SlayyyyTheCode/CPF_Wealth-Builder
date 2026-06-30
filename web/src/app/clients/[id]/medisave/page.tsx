@@ -11,6 +11,7 @@ import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
+import { setWhatIf } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // MA earns the 4% floor rate.
@@ -33,6 +34,11 @@ export default function MedisavePage({
   const [wiData, setWiData] = useState<
     { age: number; baseline: number; withTopup: number; bhs: number }[] | null
   >(null);
+
+  // Persist MA what-if params so the Overview can combine all accounts.
+  useEffect(() => {
+    setWhatIf(Number(id), { ma: { topup, startAge: topupAge } });
+  }, [id, topup, topupAge]);
 
   // Insurance drawdown calculator state
   const [maNow, setMaNow] = useState(0);          // current MA balance

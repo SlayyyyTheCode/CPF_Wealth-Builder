@@ -9,6 +9,7 @@ import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, OrdinaryIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
+import { setWhatIf } from "@/lib/whatif";
 
 // OA base interest floor.
 const OA_RATE = 0.025;
@@ -39,6 +40,11 @@ export default function OaPage({
   const [wiData, setWiData] = useState<
     { age: number; baseline: number; withTopup: number }[] | null
   >(null);
+
+  // Persist OA what-if params so the Overview can combine all accounts.
+  useEffect(() => {
+    setWhatIf(Number(id), { oa: { topup, startAge: topupAge } });
+  }, [id, topup, topupAge]);
 
   // Monthly housing mortgage — paid from OA every month from `mortgageAge`,
   // reducing the OA balance/interest shown across the page.

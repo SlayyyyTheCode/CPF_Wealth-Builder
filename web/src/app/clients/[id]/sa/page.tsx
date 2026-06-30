@@ -17,6 +17,7 @@ import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
+import { setWhatIf } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // retirement-account opening balance for a year (RA post-55, else SA).
@@ -63,6 +64,11 @@ export default function SaPage({
   const [transferAmt, setTransferAmt] = useState<number>(0);
   const [startAge, setStartAge] = useState<number>(0);
   const [yearsApplied, setYearsApplied] = useState<number>(40);
+
+  // Persist SA what-if params so the Overview can combine all accounts.
+  useEffect(() => {
+    setWhatIf(Number(id), { sa: { topup, transfer: transferAmt, startAge, years: yearsApplied } });
+  }, [id, topup, transferAmt, startAge, yearsApplied]);
   const [wiData, setWiData] = useState<
     {
       age: number; baseline: number; withTopup: number;

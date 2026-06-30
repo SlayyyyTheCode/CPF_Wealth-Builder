@@ -20,11 +20,17 @@ const GrowthChart = dynamic(
   () => import("@/components/growth-chart").then((m) => ({ default: m.GrowthChart })),
   { ssr: false, loading: () => <ChartSkeleton /> },
 );
+const WhatIfScenarioChart = dynamic(
+  () => import("@/components/whatif-scenario-chart").then((m) => ({ default: m.WhatIfScenarioChart })),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+);
 import { PageHeading, OverviewIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
-import { getMember, simulate, peekMember, peekSim } from "@/lib/api";
+import { YearScrubber } from "@/components/year-scrubber";
+import { getMember, simulate, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { Member, SimResult, Balances } from "@/lib/types";
 import { sgd, sgdCompact } from "@/lib/format";
+import { buildScenario, getWhatIf } from "@/lib/whatif";
 
 const total = (b: Balances) => b.OA + b.SA + b.MA + b.RA;
 const atAge = (r: SimResult, age: number) => {
@@ -38,12 +44,27 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
   const { id } = use(params);
   const [member, setMember] = useState<Member | null>(() => peekMember(Number(id)));
   const [res, setRes] = useState<SimResult | null>(() => peekSim(Number(id))?.result ?? null);
+  const [frsInfo, setFrsInfo] = useState<{ frs: number; sumRate: number; baseYear: number }>(
+    { frs: 0, sumRate: 0.035, baseYear: new Date().getFullYear() },
+  );
+  const [scenAge, setScenAge] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let ok = true;
-    Promise.all([getMember(Number(id)), simulate(Number(id), 91)])
-      .then(([m, run]) => { if (ok) { setMember(m); setRes(run.result); } })
+    Promise.all([getMember(Number(id)), simulate(Number(id), 91), getActivePolicy(new Date().getFullYear())])
+      .then(([m, run, policy]) => {
+        if (!ok) return;
+        setMember(m);
+        setRes(run.result);
+        const growth = (policy.assumptions as { growth?: { sum_rate?: number } } | undefined)?.growth;
+        setFrsInfo({
+          frs: Number(policy.frs) || 0,
+          sumRate: Number(growth?.sum_rate ?? 0.035),
+          baseYear: Number(policy.effective_year) || new Date().getFullYear(),
+        });
+        setScenAge((a) => a ?? run.result.years[0]?.age ?? null);
+      })
       .catch(e => ok && setErr((e as Error).message));
     return () => { ok = false; };
   }, [id]);
@@ -61,6 +82,13 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
 
   const totalInterest = lifetimeInterest(res);
   const yearAt = (age: number) => res.years.find((y) => y.age === age)?.year;
+
+  // Combined what-if scenario, pulling each account's Top-up what-if params.
+  const scenRows = buildScenario(res.years, getWhatIf(Number(id)), frsInfo);
+  const ages = res.years.map((y) => y.age);
+  const selAge = scenAge ?? ages[0];
+  const selRow = scenRows.find((r) => r.age === selAge) ?? scenRows[0];
+  const scenDelta = selRow ? selRow.scen - selRow.base : 0;
 
   return (
     <>
@@ -96,6 +124,41 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
         <AccountBreakdownChart years={res.years} />
         <p className="mt-2 text-xs text-[var(--color-muted)]">Account balances at each age after contributions, overflow and interest.</p>
       </div>
+      {/* What-If Scenario — combines the OA / SA / MA top-up calculators */}
+      <section aria-label="What-if scenario" className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
+        <h3 className="text-sm font-semibold">What-If Scenario</h3>
+        <p className="mt-1 text-xs text-[var(--color-muted)]">
+          Combines the Top-up what-if calculators from OA, SA and Medisave. Accounts
+          you haven&apos;t set fall back to their projected balance. Drag to an age to
+          compare the total.
+        </p>
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">
+            <p className="text-xs text-[var(--color-muted)]">Original total (age {selAge})</p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums">{sgd(selRow?.base ?? 0)}</p>
+          </div>
+          <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">
+            <p className="text-xs text-[var(--color-muted)]">With what-if (age {selAge})</p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--color-primary)]">{sgd(selRow?.scen ?? 0)}</p>
+          </div>
+          <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">
+            <p className="text-xs text-[var(--color-muted)]">Difference</p>
+            <p className={`mt-0.5 text-xl font-bold tabular-nums ${scenDelta > 0 ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
+              {scenDelta > 0 ? "+" : ""}{sgd(scenDelta)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <YearScrubber ages={ages} value={selAge} onChange={setScenAge} />
+        </div>
+
+        <div className="mt-4">
+          <WhatIfScenarioChart rows={scenRows} markerAge={selAge} />
+        </div>
+      </section>
+
       <div className="mt-4">
         <GrowthChart years={res.years} />
         {totalInterest > 0 && (
