@@ -395,11 +395,11 @@ export default function SaPage({
             <input
               id="sa-topup-age"
               type="number"
-              min={ages[0]}
-              max={ages[ages.length - 1]}
+              min={0}
+              max={120}
               step={1}
               value={topupAge}
-              onChange={(e) => setTopupAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              onChange={(e) => setTopupAge(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Age at which yearly top-ups begin"
             />
@@ -431,11 +431,11 @@ export default function SaPage({
             <input
               id="sa-transfer-age"
               type="number"
-              min={ages[0]}
-              max={ages[ages.length - 1]}
+              min={0}
+              max={120}
               step={1}
               value={transferAge}
-              onChange={(e) => setTransferAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              onChange={(e) => setTransferAge(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Age at which the OA to SA transfer is made"
             />

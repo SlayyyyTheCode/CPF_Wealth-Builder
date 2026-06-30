@@ -531,11 +531,11 @@ export default function OaPage({
             <input
               id="oa-topup-age"
               type="number"
-              min={ages[0]}
-              max={ages[ages.length - 1]}
+              min={0}
+              max={120}
               step={1}
               value={topupAge}
-              onChange={(e) => setTopupAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              onChange={(e) => setTopupAge(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Age at which yearly top-ups begin"
             />
@@ -644,11 +644,11 @@ export default function OaPage({
             <input
               id="oa-mortgage-age"
               type="number"
-              min={ages[0]}
-              max={ages[ages.length - 1]}
+              min={0}
+              max={120}
               step={1}
               value={mortgageAge}
-              onChange={(e) => setMortgageAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
+              onChange={(e) => setMortgageAge(Math.max(0, Number(e.target.value)))}
               className={inputClass}
               aria-label="Age at which mortgage payments begin"
             />
