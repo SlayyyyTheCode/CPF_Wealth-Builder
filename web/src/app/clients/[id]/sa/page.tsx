@@ -56,12 +56,13 @@ export default function SaPage({
   // Scrubber — seed from warm cache so the page paints fully on tab switch.
   const [age, setAge] = useState<number | null>(() => peekSim(Number(id))?.result.years[0]?.age ?? null);
 
-  // Top-up what-if (yearly) — computed client-side
+  // Top-up what-if (yearly) — computed client-side. Both the SA top-up and the
+  // OA→SA transfer are applied every year from `startAge` for `yearsApplied`
+  // years, and stop automatically once the FRS is reached.
   const [topup, setTopup] = useState<number>(0);
-  const [topupAge, setTopupAge] = useState<number>(0);
-  // One-time OA -> SA transfer (irreversible; capped at FRS; earns 4% vs OA 2.5%)
   const [transferAmt, setTransferAmt] = useState<number>(0);
-  const [transferAge, setTransferAge] = useState<number>(0);
+  const [startAge, setStartAge] = useState<number>(0);
+  const [yearsApplied, setYearsApplied] = useState<number>(40);
   const [wiData, setWiData] = useState<
     {
       age: number; baseline: number; withTopup: number;
@@ -90,8 +91,7 @@ export default function SaPage({
         setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
         if (simRun.result.years.length > 0) {
           setAge(simRun.result.years[0].age);
-          setTopupAge(simRun.result.years[0].age);
-          setTransferAge(simRun.result.years[0].age);
+          setStartAge(simRun.result.years[0].age);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -192,28 +192,29 @@ export default function SaPage({
   // `topup`; value after k years = topup * (((1+r)^k - 1)/r). Estimate layered
   // on the baseline projection.
   const SA_RATE = 0.04;
-  // Value the scenario adds over baseline at the *end* of a given age: yearly
-  // top-ups (annuity) + one-time transfer (lump), each compounded at ~4%.
-  function scenarioExtra(atAge: number): number {
-    const k = atAge - topupAge + 1;
-    const topupFv = topup > 0 && k > 0 ? topup * (((1 + SA_RATE) ** k - 1) / SA_RATE) : 0;
-    const tk = atAge - transferAge;
-    const transferFv = transferAmt > 0 && tk >= 0 ? transferAmt * (1 + SA_RATE) ** tk : 0;
-    return topupFv + transferFv;
-  }
+  // Iterate the extra SA/RA pot year by year. Both the yearly top-up and the
+  // yearly OA→SA transfer are added every year inside the [startAge, startAge +
+  // yearsApplied) window, and STOP once the scenario balance reaches the FRS
+  // (no top-ups/transfers are allowed past the FRS). The pot compounds at ~4%.
   function runWhatIf() {
+    let extraEndPrev = 0;
+    let stopped = false;
     const data = years.map((y) => {
-      const extraEnd = scenarioExtra(y.age);
-      const extraStart = scenarioExtra(y.age - 1); // = extra at end of prior year
-      const baseClose = retBal(y);
+      const extraStart = extraEndPrev;
+      let extraEnd = extraStart * (1 + SA_RATE);
+      const withinWindow = y.age >= startAge && y.age < startAge + yearsApplied;
+      if (withinWindow && !stopped) extraEnd += topup + transferAmt;
+      const closing = retBal(y) + extraEnd;
+      const frsLine = Math.round(proj(frs, y.year));
+      if (closing >= frsLine) stopped = true; // reached FRS — stop adding
+      extraEndPrev = extraEnd;
       return {
         age: y.age,
-        baseline: baseClose,
-        withTopup: baseClose + extraEnd,
+        baseline: retBal(y),
+        withTopup: closing,
         opening: retBalOpening(y) + extraStart,
-        // baseline SA/RA interest + interest earned on the extra pot held all year
         interest: retInt(y) + SA_RATE * extraStart,
-        frsLine: Math.round(proj(frs, y.year)),
+        frsLine,
         ersLine: Math.round(proj(ers, y.year)),
       };
     });
@@ -405,12 +406,9 @@ export default function SaPage({
       {/* 7. Top-up what-if calculator */}
       <div className={`${cardClass} mb-4`}>
         <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label
-              htmlFor="sa-topup"
-              className="mb-1 block text-sm text-[var(--color-muted)]"
-            >
+            <label htmlFor="sa-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
               Yearly SA top-up (S$)
             </label>
             <input
@@ -426,31 +424,8 @@ export default function SaPage({
             />
           </div>
           <div>
-            <label
-              htmlFor="sa-topup-age"
-              className="mb-1 block text-sm text-[var(--color-muted)]"
-            >
-              Start at age
-            </label>
-            <input
-              id="sa-topup-age"
-              type="number"
-              min={0}
-              max={120}
-              step={1}
-              value={topupAge}
-              onChange={(e) => setTopupAge(Math.max(0, Number(e.target.value)))}
-              className={inputClass}
-              aria-label="Age at which yearly top-ups begin"
-            />
-          </div>
-          <div className="hidden sm:block" />
-        </div>
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
-          <div>
             <label htmlFor="sa-transfer" className="mb-1 block text-sm text-[var(--color-muted)]">
-              OA → SA transfer (S$)
+              Yearly OA → SA transfer (S$)
             </label>
             <input
               id="sa-transfer"
@@ -461,40 +436,57 @@ export default function SaPage({
               placeholder="0"
               onChange={(e) => setTransferAmt(Math.max(0, Number(e.target.value)))}
               className={inputClass}
-              aria-label="One-time OA to SA transfer amount in Singapore dollars"
+              aria-label="Yearly OA to SA transfer amount in Singapore dollars"
             />
           </div>
           <div>
-            <label htmlFor="sa-transfer-age" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Transfer at age
+            <label htmlFor="sa-start-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Start at age
             </label>
             <input
-              id="sa-transfer-age"
+              id="sa-start-age"
               type="number"
               min={0}
               max={120}
               step={1}
-              value={transferAge}
-              onChange={(e) => setTransferAge(Math.max(0, Number(e.target.value)))}
+              value={startAge}
+              onChange={(e) => setStartAge(Math.max(0, Number(e.target.value)))}
               className={inputClass}
-              aria-label="Age at which the OA to SA transfer is made"
+              aria-label="Age at which top-ups and transfers begin"
             />
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={runWhatIf}
-              className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
-              aria-label="Recalculate with top-up and transfer"
-            >
-              Recalculate
-            </button>
+          <div>
+            <label htmlFor="sa-years" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Years applied
+            </label>
+            <input
+              id="sa-years"
+              type="number"
+              min={1}
+              max={80}
+              step={1}
+              value={yearsApplied}
+              onChange={(e) => setYearsApplied(Math.max(1, Number(e.target.value)))}
+              className={inputClass}
+              aria-label="How many years the top-up and transfer are applied"
+            />
           </div>
         </div>
 
-        <p className="mt-2 text-xs text-[var(--color-muted)]">
-          OA → SA transfers are irreversible and capped at the FRS, but the moved
-          funds earn 4% in SA instead of 2.5% in OA.
-        </p>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            onClick={runWhatIf}
+            className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
+            aria-label="Recalculate with top-up and transfer"
+          >
+            Recalculate
+          </button>
+          <p className="text-xs text-[var(--color-muted)]">
+            Both amounts are applied every year for the chosen span and stop
+            automatically once the SA hits the FRS. Set a large &quot;years
+            applied&quot; to model contributing continuously until FRS.
+          </p>
+        </div>
 
         {wiData && (
           <>
