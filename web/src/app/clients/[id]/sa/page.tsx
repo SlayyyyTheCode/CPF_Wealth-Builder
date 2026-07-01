@@ -171,6 +171,9 @@ export default function SaPage({
   const wiErsAge = wiData ? (wiData.find((d) => d.withTopup >= d.ersLine)?.age ?? null) : null;
   const wiFinalBal = wiData ? wiData[wiData.length - 1].withTopup : null;
   const baseFinalBal = years.length > 0 ? retBal(years[years.length - 1]) : null;
+  // Scenario SA/RA balance at 55 — the point SA converts into the RA.
+  const wi55 = wiData ? (wiData.find((d) => d.age === 55)?.withTopup ?? null) : null;
+  const base55 = wiData ? (wiData.find((d) => d.age === 55)?.baseline ?? null) : null;
 
   const wiAges = wiData ? wiData.map((d) => d.age) : [];
   const wiSel = wiData ? wiData.find((d) => d.age === wiAge) ?? null : null;
@@ -518,7 +521,7 @@ export default function SaPage({
         {wiData && (
           <>
             {/* Headline: when FRS/ERS are hit under the scenario vs baseline */}
-            <div className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <p className="text-xs text-[var(--color-muted)]">FRS hit age</p>
                 <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
@@ -539,6 +542,17 @@ export default function SaPage({
                   baseline {baseErsAge !== null ? `age ${baseErsAge}` : "—"}
                   {baseErsAge !== null && wiErsAge !== null && wiErsAge < baseErsAge
                     ? ` · ${baseErsAge - wiErsAge} yr earlier` : ""}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--color-muted)]">Total at age 55 (SA → RA)</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">
+                  {wi55 !== null ? sgd(wi55) : "—"}
+                </p>
+                <p className="text-xs text-[var(--color-muted)]">
+                  {wi55 !== null && base55 !== null
+                    ? `baseline ${sgd(base55)} · converts to RA`
+                    : "outside projection range"}
                 </p>
               </div>
               <div>
