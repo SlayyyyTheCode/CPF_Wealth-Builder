@@ -6,6 +6,7 @@ import {
 import { simulate, getMember, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
+import { NumberInput } from "@/components/number-input";
 import { PageHeading, OrdinaryIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
@@ -188,14 +189,13 @@ export default function OaPage({
             <label htmlFor="oa-mortgage" className="mb-1 block text-sm text-[var(--color-muted)]">
               Monthly Housing Mortgage (SGD)
             </label>
-            <input
+            <NumberInput
               id="oa-mortgage"
-              type="number"
               min={0}
               step={100}
-              value={mortgageMth || ""}
+              value={mortgageMth}
               placeholder="0"
-              onChange={(e) => setMortgageMth(Math.max(0, Number(e.target.value)))}
+              onChange={setMortgageMth}
               className={inputClass}
               aria-label="Monthly housing mortgage paid from OA"
             />
@@ -204,14 +204,13 @@ export default function OaPage({
             <label htmlFor="oa-mortgage-age" className="mb-1 block text-sm text-[var(--color-muted)]">
               Mortgage starts at age
             </label>
-            <input
+            <NumberInput
               id="oa-mortgage-age"
-              type="number"
               min={0}
               max={120}
               step={1}
               value={mortgageAge}
-              onChange={(e) => setMortgageAge(Math.max(0, Number(e.target.value)))}
+              onChange={setMortgageAge}
               className={inputClass}
               aria-label="Age at which mortgage payments begin"
             />
@@ -363,14 +362,13 @@ export default function OaPage({
             <label htmlFor="oa-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
               Yearly OA top-up (S$)
             </label>
-            <input
+            <NumberInput
               id="oa-topup"
-              type="number"
               min={0}
               step={1000}
-              value={topup || ""}
+              value={topup}
               placeholder="0"
-              onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
+              onChange={setTopup}
               className={inputClass}
               aria-label="Yearly OA top-up amount in Singapore dollars"
             />
@@ -379,14 +377,13 @@ export default function OaPage({
             <label htmlFor="oa-topup-age" className="mb-1 block text-sm text-[var(--color-muted)]">
               Start at age
             </label>
-            <input
+            <NumberInput
               id="oa-topup-age"
-              type="number"
               min={0}
               max={120}
               step={1}
               value={topupAge}
-              onChange={(e) => setTopupAge(Math.max(0, Number(e.target.value)))}
+              onChange={setTopupAge}
               className={inputClass}
               aria-label="Age at which yearly top-ups begin"
             />

@@ -14,6 +14,7 @@ import {
 import { simulate, getMember, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
+import { NumberInput } from "@/components/number-input";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
@@ -417,14 +418,13 @@ export default function SaPage({
             <label htmlFor="sa-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
               Yearly SA top-up (S$)
             </label>
-            <input
+            <NumberInput
               id="sa-topup"
-              type="number"
               min={0}
               step={1000}
-              value={topup || ""}
+              value={topup}
               placeholder="0"
-              onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
+              onChange={setTopup}
               className={inputClass}
               aria-label="Yearly SA top-up amount in Singapore dollars"
             />
@@ -433,14 +433,13 @@ export default function SaPage({
             <label htmlFor="sa-transfer" className="mb-1 block text-sm text-[var(--color-muted)]">
               Yearly OA → SA transfer (S$)
             </label>
-            <input
+            <NumberInput
               id="sa-transfer"
-              type="number"
               min={0}
               step={1000}
-              value={transferAmt || ""}
+              value={transferAmt}
               placeholder="0"
-              onChange={(e) => setTransferAmt(Math.max(0, Number(e.target.value)))}
+              onChange={setTransferAmt}
               className={inputClass}
               aria-label="Yearly OA to SA transfer amount in Singapore dollars"
             />
@@ -449,14 +448,13 @@ export default function SaPage({
             <label htmlFor="sa-start-age" className="mb-1 block text-sm text-[var(--color-muted)]">
               Start at age
             </label>
-            <input
+            <NumberInput
               id="sa-start-age"
-              type="number"
               min={0}
               max={120}
               step={1}
               value={startAge}
-              onChange={(e) => setStartAge(Math.max(0, Number(e.target.value)))}
+              onChange={setStartAge}
               className={inputClass}
               aria-label="Age at which top-ups and transfers begin"
             />
@@ -465,14 +463,13 @@ export default function SaPage({
             <label htmlFor="sa-years" className="mb-1 block text-sm text-[var(--color-muted)]">
               Years applied
             </label>
-            <input
+            <NumberInput
               id="sa-years"
-              type="number"
               min={1}
               max={80}
               step={1}
               value={yearsApplied}
-              onChange={(e) => setYearsApplied(Math.max(1, Number(e.target.value)))}
+              onChange={setYearsApplied}
               className={inputClass}
               aria-label="How many years the top-up and transfer are applied"
             />
