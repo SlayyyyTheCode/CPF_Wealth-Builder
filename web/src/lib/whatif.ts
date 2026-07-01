@@ -9,7 +9,7 @@ export const MA_RATE = 0.04;
 
 export interface OaParams { topup: number; startAge: number }
 export interface MaParams { topup: number; startAge: number }
-export interface SaParams { topup: number; transfer: number; startAge: number; years: number }
+export interface SaParams { topup: number; transfer: number; startAge: number; transferStartAge: number; years: number }
 
 export interface WhatIfParams { oa?: OaParams; sa?: SaParams; ma?: MaParams }
 
@@ -55,8 +55,11 @@ export function buildScenario(
   for (const y of years) {
     let extraEnd = extraPrev * (1 + SA_RATE);
     const sa = p.sa;
-    const within = sa && y.age >= sa.startAge && y.age < sa.startAge + sa.years;
-    if (sa && within && !stopped) extraEnd += sa.topup + sa.transfer;
+    if (sa && !stopped) {
+      if (y.age >= sa.startAge && y.age < sa.startAge + sa.years) extraEnd += sa.topup;
+      const tStart = sa.transferStartAge ?? sa.startAge;
+      if (y.age >= tStart && y.age < tStart + sa.years) extraEnd += sa.transfer;
+    }
     if (retClosing(y) + extraEnd >= projFrs(y.year)) stopped = true;
     saExtra.set(y.age, extraEnd);
     extraPrev = extraEnd;

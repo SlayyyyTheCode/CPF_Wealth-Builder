@@ -63,13 +63,14 @@ export default function SaPage({
   // years, and stop automatically once the FRS is reached.
   const [topup, setTopup] = useState<number>(0);
   const [transferAmt, setTransferAmt] = useState<number>(0);
-  const [startAge, setStartAge] = useState<number>(0);
+  const [startAge, setStartAge] = useState<number>(0);           // top-up start
+  const [transferStartAge, setTransferStartAge] = useState<number>(0); // transfer start
   const [yearsApplied, setYearsApplied] = useState<number>(40);
 
   // Persist SA what-if params so the Overview can combine all accounts.
   useEffect(() => {
-    setWhatIf(Number(id), { sa: { topup, transfer: transferAmt, startAge, years: yearsApplied } });
-  }, [id, topup, transferAmt, startAge, yearsApplied]);
+    setWhatIf(Number(id), { sa: { topup, transfer: transferAmt, startAge, transferStartAge, years: yearsApplied } });
+  }, [id, topup, transferAmt, startAge, transferStartAge, yearsApplied]);
   const [wiData, setWiData] = useState<
     {
       age: number; baseline: number; withTopup: number;
@@ -99,6 +100,7 @@ export default function SaPage({
         if (simRun.result.years.length > 0) {
           setAge(simRun.result.years[0].age);
           setStartAge(simRun.result.years[0].age);
+          setTransferStartAge(simRun.result.years[0].age);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -199,18 +201,21 @@ export default function SaPage({
   // `topup`; value after k years = topup * (((1+r)^k - 1)/r). Estimate layered
   // on the baseline projection.
   const SA_RATE = 0.04;
-  // Iterate the extra SA/RA pot year by year. Both the yearly top-up and the
-  // yearly OA→SA transfer are added every year inside the [startAge, startAge +
-  // yearsApplied) window, and STOP once the scenario balance reaches the FRS
-  // (no top-ups/transfers are allowed past the FRS). The pot compounds at ~4%.
+  // Iterate the extra SA/RA pot year by year. The yearly top-up runs from its
+  // start age, and the yearly OA→SA transfer runs from its own start age, each
+  // for `yearsApplied` years. Both STOP once the scenario balance reaches the
+  // FRS (top-ups/transfers aren't allowed past the FRS), which also makes any
+  // remaining "years applied" ineffective. The pot compounds at ~4%.
   function runWhatIf() {
     let extraEndPrev = 0;
     let stopped = false;
     const data = years.map((y) => {
       const extraStart = extraEndPrev;
       let extraEnd = extraStart * (1 + SA_RATE);
-      const withinWindow = y.age >= startAge && y.age < startAge + yearsApplied;
-      if (withinWindow && !stopped) extraEnd += topup + transferAmt;
+      if (!stopped) {
+        if (y.age >= startAge && y.age < startAge + yearsApplied) extraEnd += topup;
+        if (y.age >= transferStartAge && y.age < transferStartAge + yearsApplied) extraEnd += transferAmt;
+      }
       const closing = retBal(y) + extraEnd;
       const frsLine = Math.round(proj(frs, y.year));
       if (closing >= frsLine) stopped = true; // reached FRS — stop adding
@@ -413,7 +418,7 @@ export default function SaPage({
       {/* 7. Top-up what-if calculator */}
       <div className={`${cardClass} mb-4`}>
         <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label htmlFor="sa-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
               Yearly SA top-up (S$)
@@ -427,6 +432,36 @@ export default function SaPage({
               onChange={setTopup}
               className={inputClass}
               aria-label="Yearly SA top-up amount in Singapore dollars"
+            />
+          </div>
+          <div>
+            <label htmlFor="sa-start-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Top-up start at age
+            </label>
+            <NumberInput
+              id="sa-start-age"
+              min={0}
+              max={120}
+              step={1}
+              value={startAge}
+              onChange={setStartAge}
+              className={inputClass}
+              aria-label="Age at which the yearly SA top-up begins"
+            />
+          </div>
+          <div>
+            <label htmlFor="sa-years" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Years applied
+            </label>
+            <NumberInput
+              id="sa-years"
+              min={1}
+              max={80}
+              step={1}
+              value={yearsApplied}
+              onChange={setYearsApplied}
+              className={inputClass}
+              aria-label="How many years each lever is applied"
             />
           </div>
           <div>
@@ -445,35 +480,21 @@ export default function SaPage({
             />
           </div>
           <div>
-            <label htmlFor="sa-start-age" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Start at age
+            <label htmlFor="sa-transfer-start-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Transfer start at age
             </label>
             <NumberInput
-              id="sa-start-age"
+              id="sa-transfer-start-age"
               min={0}
               max={120}
               step={1}
-              value={startAge}
-              onChange={setStartAge}
+              value={transferStartAge}
+              onChange={setTransferStartAge}
               className={inputClass}
-              aria-label="Age at which top-ups and transfers begin"
+              aria-label="Age at which the yearly OA to SA transfer begins"
             />
           </div>
-          <div>
-            <label htmlFor="sa-years" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Years applied
-            </label>
-            <NumberInput
-              id="sa-years"
-              min={1}
-              max={80}
-              step={1}
-              value={yearsApplied}
-              onChange={setYearsApplied}
-              className={inputClass}
-              aria-label="How many years the top-up and transfer are applied"
-            />
-          </div>
+          <div className="hidden lg:block" />
         </div>
 
         <div className="mt-3 flex items-center gap-3">
@@ -485,9 +506,12 @@ export default function SaPage({
             Recalculate
           </button>
           <p className="text-xs text-[var(--color-muted)]">
-            Both amounts are applied every year for the chosen span and stop
-            automatically once the SA hits the FRS. Set a large &quot;years
-            applied&quot; to model contributing continuously until FRS.
+            The top-up and transfer each run from their own start age for the
+            chosen &quot;years applied&quot;. Note: once the SA reaches the FRS,
+            further top-ups and transfers are not allowed — so both amounts
+            <span className="font-medium"> and any remaining &quot;years
+            applied&quot; become ineffective</span> from that point. Set a large
+            &quot;years applied&quot; to model contributing continuously until FRS.
           </p>
         </div>
 
