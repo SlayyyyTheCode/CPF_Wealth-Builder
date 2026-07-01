@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from "recharts";
@@ -11,7 +11,7 @@ import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { setWhatIf } from "@/lib/whatif";
+import { getWhatIf, setWhatIf } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // MA earns the 4% floor rate.
@@ -29,8 +29,9 @@ export default function MedisavePage({
   const [err, setErr] = useState<string | null>(null);
 
   // Top-up what-if (yearly MA voluntary contribution from a chosen age)
-  const [topup, setTopup] = useState<number>(0);
-  const [topupAge, setTopupAge] = useState<number>(0);
+  const savedMa = useMemo(() => getWhatIf(Number(id)).ma, [id]);
+  const [topup, setTopup] = useState<number>(() => savedMa?.topup ?? 0);
+  const [topupAge, setTopupAge] = useState<number>(() => savedMa?.startAge ?? 0);
   const [wiData, setWiData] = useState<
     { age: number; baseline: number; withTopup: number; bhs: number }[] | null
   >(null);

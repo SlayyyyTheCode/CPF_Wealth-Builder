@@ -18,7 +18,7 @@ import { NumberInput } from "@/components/number-input";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { setWhatIf } from "@/lib/whatif";
+import { getWhatIf, setWhatIf } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // retirement-account opening balance for a year (RA post-55, else SA).
@@ -61,11 +61,12 @@ export default function SaPage({
   // Top-up what-if (yearly) — computed client-side. Both the SA top-up and the
   // OA→SA transfer are applied every year from `startAge` for `yearsApplied`
   // years, and stop automatically once the FRS is reached.
-  const [topup, setTopup] = useState<number>(0);
-  const [transferAmt, setTransferAmt] = useState<number>(0);
-  const [startAge, setStartAge] = useState<number>(0);           // top-up start
-  const [transferStartAge, setTransferStartAge] = useState<number>(0); // transfer start
-  const [yearsApplied, setYearsApplied] = useState<number>(40);
+  const savedSa = useMemo(() => getWhatIf(Number(id)).sa, [id]);
+  const [topup, setTopup] = useState<number>(() => savedSa?.topup ?? 0);
+  const [transferAmt, setTransferAmt] = useState<number>(() => savedSa?.transfer ?? 0);
+  const [startAge, setStartAge] = useState<number>(() => savedSa?.startAge ?? 0);           // top-up start
+  const [transferStartAge, setTransferStartAge] = useState<number>(() => savedSa?.transferStartAge ?? 0); // transfer start
+  const [yearsApplied, setYearsApplied] = useState<number>(() => savedSa?.years ?? 40);
 
   // Persist SA what-if params so the Overview can combine all accounts.
   useEffect(() => {
@@ -357,16 +358,7 @@ export default function SaPage({
         </div>
       )}
 
-      {/* 3c. Combined CPF balance */}
-      {yr && (
-        <div className={`${cardClass} mb-4`}>
-          <p className={labelClass}>Combined CPF balance</p>
-          <p className={kpiClass}>{sgd(combined)}</p>
-          <p className="mt-1 text-xs text-[var(--color-muted)]">OA + SA + MA + RA (age {age})</p>
-        </div>
-      )}
-
-      {/* 4. SA inflow/overflow card */}
+      {/* 3c. SA inflow/overflow card */}
       <div className={`${cardClass} mb-4`}>
         <h3 className={`${labelClass} mb-3`}>SA inflows &amp; overflow (age {age})</h3>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -400,6 +392,15 @@ export default function SaPage({
           can&apos;t meet the FRS at 55, up to $5,000 stays withdrawable in your OA.
         </p>
       </div>
+
+      {/* 4. Combined CPF balance */}
+      {yr && (
+        <div className={`${cardClass} mb-4`}>
+          <p className={labelClass}>Combined CPF balance</p>
+          <p className={kpiClass}>{sgd(combined)}</p>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">OA + SA + MA + RA (age {age})</p>
+        </div>
+      )}
 
       {/* 5. Compounding note */}
       <div

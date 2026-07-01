@@ -10,7 +10,7 @@ import { NumberInput } from "@/components/number-input";
 import { PageHeading, OrdinaryIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { setWhatIf } from "@/lib/whatif";
+import { getWhatIf, setWhatIf } from "@/lib/whatif";
 
 // OA base interest floor.
 const OA_RATE = 0.025;
@@ -36,8 +36,9 @@ export default function OaPage({
   const [err, setErr] = useState<string | null>(null);
 
   // Top-up what-if (yearly OA voluntary contribution from a chosen age)
-  const [topup, setTopup] = useState<number>(0);
-  const [topupAge, setTopupAge] = useState<number>(0);
+  const savedOa = useMemo(() => getWhatIf(Number(id)).oa, [id]);
+  const [topup, setTopup] = useState<number>(() => savedOa?.topup ?? 0);
+  const [topupAge, setTopupAge] = useState<number>(() => savedOa?.startAge ?? 0);
   const [wiData, setWiData] = useState<
     { age: number; baseline: number; withTopup: number }[] | null
   >(null);
