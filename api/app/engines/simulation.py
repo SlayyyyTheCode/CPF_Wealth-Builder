@@ -136,9 +136,13 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
 
             # 4. Year-end interest credit
             if month == 12:
-                state, base_total, extra_total, ev = apply_credit(
-                    state, base_acc, extra_acc, age
+                state, base_total, extra_total, ev, ma_ovf_int = apply_credit(
+                    state, base_acc, extra_acc, age, policy
                 )
+                # A full MA's interest overflows to SA/RA/OA — track it too.
+                ovf_year["ma_to_sa"] += ma_ovf_int["to_SA"]
+                ovf_year["ma_to_ra"] += ma_ovf_int["to_RA"]
+                ovf_year["ma_to_oa"] += ma_ovf_int["to_OA"]
                 events.append(Event("INTEREST_CREDITED", year, 12,
                                     {"base": base_total, "extra": extra_total}))
                 years.append(YearResult(

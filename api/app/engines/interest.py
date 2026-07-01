@@ -73,31 +73,54 @@ def monthly_extra(opening: AccountState, age: int, policy: dict) -> dict:
     return result
 
 
-def apply_credit(state: AccountState, base_acc: dict, extra_acc: dict, age: int):
+def apply_credit(state: AccountState, base_acc: dict, extra_acc: dict, age: int, policy: dict):
     """Post accumulated base + extra interest at year end.
     <55: OA-extra routes to SA, other extra to own account.
-    55+: all extra routes to RA. Returns (state, base_total, extra_total, event)."""
+    55+: all extra routes to RA.
+
+    A full MediSave (at the BHS) cannot hold its own interest: any MA interest
+    that would push MA above the BHS cascades out using the same order as
+    contributions — SA up to the FRS (RA post-55), then OA.
+
+    Returns (state, base_total, extra_total, event, ma_overflow) where
+    ma_overflow = {"to_SA", "to_RA", "to_OA"}."""
     base = {a: round_to_cent(base_acc[a]) for a in ACCOUNTS}
     extra = {a: round_to_cent(extra_acc[a]) for a in ACCOUNTS}
     base_total = sum(base.values(), ZERO)
     extra_total = sum(extra.values(), ZERO)
 
     if age < 55:
-        new = replace(
-            state,
-            OA=state.OA + base["OA"],
-            SA=state.SA + base["SA"] + extra["SA"] + extra["OA"],
-            MA=state.MA + base["MA"] + extra["MA"],
-            RA=state.RA + base["RA"] + extra["RA"],
-        )
+        oa = state.OA + base["OA"]
+        sa = state.SA + base["SA"] + extra["SA"] + extra["OA"]
+        ma = state.MA + base["MA"] + extra["MA"]
+        ra = state.RA + base["RA"] + extra["RA"]
     else:
         extra_to_ra = extra["OA"] + extra["SA"] + extra["MA"] + extra["RA"]
-        new = replace(
-            state,
-            OA=state.OA + base["OA"],
-            SA=state.SA + base["SA"],
-            MA=state.MA + base["MA"],
-            RA=state.RA + base["RA"] + extra_to_ra,
-        )
+        oa = state.OA + base["OA"]
+        sa = state.SA + base["SA"]
+        ma = state.MA + base["MA"]
+        ra = state.RA + base["RA"] + extra_to_ra
+
+    # MA interest can't stay once MA is at the BHS — cascade the excess.
+    bhs = Decimal(str(policy["bhs"]))
+    frs = Decimal(str(policy["frs"]))
+    ma_ovf = {"to_SA": ZERO, "to_RA": ZERO, "to_OA": ZERO}
+    if ma > bhs:
+        excess = ma - bhs
+        ma = bhs
+        if age < 55:
+            to_sa = min(excess, max(frs - sa, ZERO))
+            sa += to_sa
+            oa += excess - to_sa
+            ma_ovf["to_SA"] = to_sa
+            ma_ovf["to_OA"] = excess - to_sa
+        else:
+            to_ra = min(excess, max(frs - ra, ZERO))
+            ra += to_ra
+            oa += excess - to_ra
+            ma_ovf["to_RA"] = to_ra
+            ma_ovf["to_OA"] = excess - to_ra
+
+    new = replace(state, OA=oa, SA=sa, MA=ma, RA=ra)
     event = Event("INTEREST_CREDITED", 0, 12, {"base": base_total, "extra": extra_total})
-    return new, base_total, extra_total, event
+    return new, base_total, extra_total, event, ma_ovf

@@ -3,12 +3,16 @@ from app.engines.domain import AccountState
 from app.engines.money import round_to_cent
 from app.engines.interest import monthly_extra, apply_credit
 
-POLICY = {"interest_rates": {
-    "extra_under55": {"rate": 0.01, "cap_combined": 60000, "oa_cap": 20000},
-    "extra_55plus": {"tier1_rate": 0.02, "tier1_cap": 30000,
-                     "tier2_rate": 0.01, "tier2_cap": 30000, "oa_cap": 20000},
-    "priority": ["RA", "OA", "SA", "MA"],
-}}
+POLICY = {
+    "bhs": 79000,
+    "frs": 220400,
+    "interest_rates": {
+        "extra_under55": {"rate": 0.01, "cap_combined": 60000, "oa_cap": 20000},
+        "extra_55plus": {"tier1_rate": 0.02, "tier1_cap": 30000,
+                         "tier2_rate": 0.01, "tier2_cap": 30000, "oa_cap": 20000},
+        "priority": ["RA", "OA", "SA", "MA"],
+    },
+}
 
 
 def _annual(m):
@@ -48,11 +52,12 @@ def test_apply_credit_under55_routes_oa_extra_to_sa():
                          MA=Decimal("15000"), RA=Decimal("0"))
     base = {"OA": Decimal("500"), "SA": Decimal("1200"), "MA": Decimal("600"), "RA": Decimal("0")}
     extra = {"OA": Decimal("200"), "SA": Decimal("300"), "MA": Decimal("100"), "RA": Decimal("0")}
-    new, base_total, extra_total, ev = apply_credit(state, base, extra, 40)
+    new, base_total, extra_total, ev, ma_ovf = apply_credit(state, base, extra, 40, POLICY)
     assert new.OA == Decimal("20500.00")                 # base only
     assert new.SA == Decimal("31700.00")                 # 30000 + 1200 + (200+300)
     assert new.MA == Decimal("15700.00")                 # 15000 + 600 + 100
     assert new.RA == Decimal("0.00")
+    assert ma_ovf == {"to_SA": Decimal("0"), "to_RA": Decimal("0"), "to_OA": Decimal("0")}
     assert base_total == Decimal("2300.00")
     assert extra_total == Decimal("600.00")
     assert ev.kind == "INTEREST_CREDITED"
@@ -63,8 +68,47 @@ def test_apply_credit_55plus_routes_all_extra_to_ra():
                          MA=Decimal("50000"), RA=Decimal("100000"))
     base = {"OA": Decimal("250"), "SA": Decimal("0"), "MA": Decimal("2000"), "RA": Decimal("4000")}
     extra = {"OA": Decimal("300"), "SA": Decimal("0"), "MA": Decimal("200"), "RA": Decimal("400")}
-    new, base_total, extra_total, ev = apply_credit(state, base, extra, 60)
+    new, base_total, extra_total, ev, ma_ovf = apply_credit(state, base, extra, 60, POLICY)
     assert new.OA == Decimal("10250.00")
     assert new.MA == Decimal("52000.00")
     assert new.RA == Decimal("104900.00")                # 100000 + 4000 + (300+200+400)
     assert extra_total == Decimal("900.00")
+
+
+def test_apply_credit_ma_at_bhs_interest_overflows_to_sa():
+    # MA already at BHS: its interest can't stay, overflows to SA (SA < FRS).
+    state = AccountState(OA=Decimal("0"), SA=Decimal("1000"),
+                         MA=Decimal("79000"), RA=Decimal("0"))
+    base = {"OA": Decimal("0"), "SA": Decimal("0"), "MA": Decimal("3160"), "RA": Decimal("0")}
+    extra = {"OA": Decimal("0"), "SA": Decimal("0"), "MA": Decimal("100"), "RA": Decimal("0")}
+    new, _b, _e, _ev, ma_ovf = apply_credit(state, base, extra, 40, POLICY)
+    assert new.MA == Decimal("79000.00")                  # capped at BHS
+    assert new.SA == Decimal("4260.00")                   # 1000 + 3160 + 100 interest
+    assert new.OA == Decimal("0.00")
+    assert ma_ovf["to_SA"] == Decimal("3260.00")
+    assert ma_ovf["to_OA"] == Decimal("0.00")
+
+
+def test_apply_credit_ma_at_bhs_sa_at_frs_overflows_to_oa():
+    # MA at BHS and SA at FRS: MA interest overflows past SA into OA.
+    state = AccountState(OA=Decimal("0"), SA=Decimal("220400"),
+                         MA=Decimal("79000"), RA=Decimal("0"))
+    base = {"OA": Decimal("0"), "SA": Decimal("0"), "MA": Decimal("3160"), "RA": Decimal("0")}
+    extra = {"OA": Decimal("0"), "SA": Decimal("0"), "MA": Decimal("0"), "RA": Decimal("0")}
+    new, _b, _e, _ev, ma_ovf = apply_credit(state, base, extra, 40, POLICY)
+    assert new.MA == Decimal("79000.00")
+    assert new.SA == Decimal("220400.00")                 # SA full at FRS
+    assert new.OA == Decimal("3160.00")                   # overflow lands in OA
+    assert ma_ovf["to_OA"] == Decimal("3160.00")
+
+
+def test_apply_credit_ma_at_bhs_55plus_overflows_to_ra():
+    # 55+: MA interest overflows to RA (up to FRS) then OA.
+    state = AccountState(OA=Decimal("0"), SA=Decimal("0"),
+                         MA=Decimal("79000"), RA=Decimal("100000"))
+    base = {"OA": Decimal("0"), "SA": Decimal("0"), "MA": Decimal("3160"), "RA": Decimal("0")}
+    extra = {"OA": Decimal("0"), "SA": Decimal("0"), "MA": Decimal("0"), "RA": Decimal("0")}
+    new, _b, _e, _ev, ma_ovf = apply_credit(state, base, extra, 60, POLICY)
+    assert new.MA == Decimal("79000.00")
+    assert new.RA == Decimal("103160.00")                 # 100000 + 3160 to RA
+    assert ma_ovf["to_RA"] == Decimal("3160.00")
