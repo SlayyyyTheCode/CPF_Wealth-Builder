@@ -130,8 +130,10 @@ export default function OaPage({
   const oaOpening = adj ? adj.opening : (yr?.opening?.OA ?? 0);
   const oaInterest = adj ? adj.interest : (yr?.interest_by_account?.OA ?? 0);
   const extraInterest = yr ? oaExtraInterest(oaBalance, age) : 0;
+  // Combined CPF is the raw projection total (same across all account tabs);
+  // the OA-only mortgage what-if does not change this cross-account figure.
   const combined = yr
-    ? oaBalance + yr.closing.SA + yr.closing.MA + yr.closing.RA
+    ? yr.closing.OA + yr.closing.SA + yr.closing.MA + yr.closing.RA
     : 0;
 
   // OA → RA at 55: SA closes and OA tops the RA up to the FRS. Estimate the
