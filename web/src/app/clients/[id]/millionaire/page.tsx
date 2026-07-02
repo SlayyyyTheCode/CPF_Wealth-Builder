@@ -133,19 +133,14 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
   const currentYear = years[0].year;
   const yearForAge = (age: number) => currentYear + (age - currentAge);
 
-  // Actual engine-projected RA at 55 — same trajectory Overview's "Projected
-  // at 55" is built from, instead of a separate ERS-assumption formula.
-  const raAt55Actual = currentAge >= 55
-    ? Math.round(member.balances.RA)
-    : Math.round(years.find((y) => y.age === 55)?.closing.RA ?? proj(ers, yearForAge(55)));
-
-  // Same trajectory, but with the Overview "What-If Scenario" top-ups applied
-  // (OA/SA/MA what-if calculators saved from those tabs).
+  // CPF LIFE age-65 payout-eligible balance (OA + SA/RA, excludes MA) —
+  // straight from Overview's "What-If Scenario": "Original total (age 65)"
+  // and "With what-if (age 65)".
   const frsInfo = { frs, sumRate, baseYear };
   const scenRows = buildScenario(years, getWhatIf(Number(id)), frsInfo);
-  const raAt55Scenario = currentAge >= 55
-    ? raAt55Actual
-    : Math.round(scenRows.find((r) => r.age === 55)?.scenRa ?? raAt55Actual);
+  const row65 = scenRows.find((r) => r.age === 65) ?? scenRows[scenRows.length - 1] ?? scenRows[0];
+  const raAt65Actual = Math.round(row65?.base ?? 0);
+  const raAt65Scenario = Math.round(row65?.scen ?? raAt65Actual);
 
   return (
     <>
@@ -163,14 +158,14 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
       <WhatIfCard
         uid="wi-proj"
         title="Projected CPF LIFE Delay Payouts (65 → 70)"
-        description="Every year you defer past 65 raises your payout by ~7% — up to +35% at age 70 — permanently. The RA also keeps compounding at 4% while you wait. RA at 55 defaults to your actual projected trajectory (same as Overview's “Projected at 55”)."
-        defaultRa55={raAt55Actual}
+        description="Every year you defer past 65 raises your payout by ~7% — up to +35% at age 70 — permanently. The balance also keeps compounding at 4% while you wait. Defaults to Overview's “Original total (age 65)” from the What-If Scenario (OA + SA/RA, payout-eligible)."
+        defaultRa65={raAt65Actual}
       />
       <WhatIfCard
         uid="wi-hypo"
         title="Hypothetical CPF LIFE Delay Payouts (65 → 70)"
-        description="Same deferral math, but starting from the RA under Overview's “What-If Scenario” (your OA/SA/MA top-up calculators applied) instead of the actual projected trajectory."
-        defaultRa55={raAt55Scenario}
+        description="Same deferral math, but defaults to Overview's “With what-if (age 65)” from the What-If Scenario — your OA/SA top-up calculators applied."
+        defaultRa65={raAt65Scenario}
       />
       <OptimizerSection member={member} ers={ers} bhs={bhs} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
       <WithdrawalTimeline member={member} ers={ers} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
@@ -634,14 +629,14 @@ function CpfisWhatIfCard({ member }: { member: Member }) {
 
 // ── 5. What-if Scenario (CPF LIFE deferral 65→70) ───────────────────────────────
 function WhatIfCard({
-  uid, title, description, defaultRa55,
+  uid, title, description, defaultRa65,
 }: {
-  uid: string; title: string; description: string; defaultRa55: number;
+  uid: string; title: string; description: string; defaultRa65: number;
 }) {
-  const [ra55, setRa55] = useState(defaultRa55);
+  const [ra65, setRa65] = useState(defaultRa65);
   const [plan, setPlan] = useState<Plan>("Standard");
 
-  const raAtAge = (age: number) => ra55 * (1 + RA_RATE) ** Math.max(age - 55, 0);
+  const raAtAge = (age: number) => ra65 * (1 + RA_RATE) ** Math.max(age - 65, 0);
 
   const payoutRows = useMemo(() => {
     const base = monthlyFromRA(raAtAge(65), 65, plan);
@@ -650,12 +645,12 @@ function WhatIfCard({
       return { age, ra: Math.round(raAtAge(age)), monthly: Math.round(monthly), uplift: base > 0 ? (monthly / base - 1) * 100 : 0 };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ra55, plan]);
+  }, [ra65, plan]);
 
   const raSeries = useMemo(
-    () => Array.from({ length: 90 - 55 + 1 }, (_, i) => 55 + i).map((age) => ({ age, ra: Math.round(raAtAge(age)) })),
+    () => Array.from({ length: 90 - 65 + 1 }, (_, i) => 65 + i).map((age) => ({ age, ra: Math.round(raAtAge(age)) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ra55],
+    [ra65],
   );
 
   return (
@@ -665,10 +660,10 @@ function WhatIfCard({
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor={`${uid}-ra`} className="mb-1 block text-xs font-medium">RA at age 55 (S$)</label>
-          <input id={`${uid}-ra`} type="number" min={0} step={10000} value={ra55}
-            onChange={(e) => setRa55(Math.max(0, Number(e.target.value)))} className={inputClass}
-            aria-label="RA balance at age 55" />
+          <label htmlFor={`${uid}-ra`} className="mb-1 block text-xs font-medium">CPF LIFE balance at age 65 (S$)</label>
+          <input id={`${uid}-ra`} type="number" min={0} step={10000} value={ra65}
+            onChange={(e) => setRa65(Math.max(0, Number(e.target.value)))} className={inputClass}
+            aria-label="Payout-eligible balance at age 65" />
         </div>
         <div>
           <label htmlFor={`${uid}-plan`} className="mb-1 block text-xs font-medium">CPF LIFE plan</label>
@@ -684,7 +679,7 @@ function WhatIfCard({
           <thead>
             <tr className="border-b border-[var(--color-border)] text-left text-xs text-[var(--color-muted)]">
               <th className="pb-2 font-medium">Start age</th>
-              <th className="pb-2 text-right font-medium">RA at payout</th>
+              <th className="pb-2 text-right font-medium">Balance at payout</th>
               <th className="pb-2 text-right font-medium">Monthly payout</th>
               <th className="pb-2 text-right font-medium">vs age 65</th>
             </tr>
@@ -702,23 +697,22 @@ function WhatIfCard({
         </table>
       </div>
 
-      <div role="img" aria-label="Total RA balance from age 55 to 90" className="mt-4 h-64">
+      <div role="img" aria-label="Balance from age 65 to 90" className="mt-4 h-64">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={raSeries} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
             <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
             <YAxis tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={52} />
-            <Tooltip formatter={(v) => [sgd(typeof v === "number" ? v : null), "RA balance"]} labelFormatter={(a) => `Age ${a}`} contentStyle={tooltipStyle} />
-            <Legend formatter={() => "RA balance (4% compounding)"} wrapperStyle={{ fontSize: "12px" }} />
-            <ReferenceLine x={65} stroke="var(--chart-4)" strokeDasharray="4 2" label={{ value: "65", fontSize: 10, fill: "var(--color-muted)" }} />
+            <Tooltip formatter={(v) => [sgd(typeof v === "number" ? v : null), "Balance"]} labelFormatter={(a) => `Age ${a}`} contentStyle={tooltipStyle} />
+            <Legend formatter={() => "Balance (4% compounding)"} wrapperStyle={{ fontSize: "12px" }} />
             <ReferenceLine x={70} stroke="var(--chart-3)" strokeDasharray="4 2" label={{ value: "70", fontSize: 10, fill: "var(--color-muted)" }} />
             <Line isAnimationActive={false} type="monotone" dataKey="ra" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
       <p className="mt-2 text-xs text-[var(--color-muted)]">
-        RA shown growing at 4% to age 90. Once payouts begin, CPF LIFE annuitises the RA — the table
-        gives the first-month payout for each start age.
+        Balance shown growing at 4% from age 65. Once payouts begin, CPF LIFE annuitises the balance —
+        the table gives the first-month payout for each start age.
       </p>
     </section>
   );
