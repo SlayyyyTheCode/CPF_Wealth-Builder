@@ -116,6 +116,9 @@ export const createMember = (m: NewMember) =>
 export const simulate = (id: number, end_age = 90) =>
   cached(`sim:${id}:${end_age}`, () =>
     apiPost<SimRun>(`/members/${id}/simulate`, { end_age, persist: false }, id));
+// Optimisation tab's default analysis params — shared so warmClient's
+// prefetch lands under the same cache key the page itself requests.
+export const DEFAULT_ANALYSIS_PARAMS = { annual_assessable_income: 0, payout_age: 65, end_age: 90 };
 export const getAnalysis = (id: number, body: Record<string, unknown> = {}) =>
   cached(`analysis:${id}:${JSON.stringify(body)}`, () =>
     apiPost<Analysis>(`/members/${id}/analysis`, body, id));
@@ -126,12 +129,17 @@ export const getAnalysis = (id: number, body: Record<string, unknown> = {}) =>
 export const peekSim = (id: number, end_age = 91) => peek<SimRun>(`sim:${id}:${end_age}`);
 export const peekMember = (id: number) => peek<Member>(`member:${id}`);
 export const peekPolicy = (year: number) => peek<Record<string, unknown>>(`policy:${year}`);
+export const peekAnalysis = (id: number, body: Record<string, unknown> = DEFAULT_ANALYSIS_PARAMS) =>
+  peek<Analysis>(`analysis:${id}:${JSON.stringify(body)}`);
 
-// Kick off the shared projection + active policy as early as possible (on
-// entering a client) so every tab reuses one cached result. Fire-and-forget.
+// Kick off every read-only cross-tab call as early as possible (on entering a
+// client) so every tab reuses one cached result instead of paying its own
+// round-trip on first visit. Fire-and-forget, run in parallel — none of these
+// need the member profile to have resolved first.
 export function warmClient(id: number) {
   simulate(id, 91).catch(() => {});
   getActivePolicy(new Date().getFullYear()).catch(() => {});
+  getAnalysis(id, DEFAULT_ANALYSIS_PARAMS).catch(() => {});
 }
 
 export async function ingestPolicy(file: File): Promise<IngestResult> {

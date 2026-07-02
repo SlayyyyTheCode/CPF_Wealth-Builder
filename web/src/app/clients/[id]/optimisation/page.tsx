@@ -1,6 +1,6 @@
 "use client";
 import { use, useEffect, useState } from "react";
-import { getAnalysis, getMember } from "@/lib/api";
+import { getAnalysis, getMember, peekAnalysis, peekMember, DEFAULT_ANALYSIS_PARAMS } from "@/lib/api";
 import type { Analysis, Residency } from "@/lib/types";
 import { ScenarioCards } from "@/components/scenario-cards";
 import { StrategyList } from "@/components/strategy-list";
@@ -14,17 +14,15 @@ export default function OptimisationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [residency, setResidency] = useState<Residency>("citizen");
+  // Seed from warm cache (warmClient prefetches this on entering the client)
+  // so the tab paints instantly instead of showing the skeleton every switch.
+  const [analysis, setAnalysis] = useState<Analysis | null>(() => peekAnalysis(Number(id)));
+  const [residency, setResidency] = useState<Residency>(() => peekMember(Number(id))?.residency ?? "citizen");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let ok = true;
-    getAnalysis(Number(id), {
-      annual_assessable_income: 0,
-      payout_age: 65,
-      end_age: 90,
-    })
+    getAnalysis(Number(id), DEFAULT_ANALYSIS_PARAMS)
       .then((a) => ok && setAnalysis(a))
       .catch((e) => ok && setErr((e as Error).message));
     getMember(Number(id))

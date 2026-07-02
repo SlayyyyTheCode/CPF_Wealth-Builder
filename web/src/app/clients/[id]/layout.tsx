@@ -23,8 +23,12 @@ export default function ClientLayout({
     let ok = true;
     // The server gates protected profiles: an admin token or a stored member
     // token unlocks it; otherwise getMember 401s and we show the password gate.
+    // Fire the rest of the client's data in parallel with the member fetch —
+    // none of it depends on the member object resolving first, so waiting for
+    // it before warming was a needless serial round-trip on every cold open.
+    warmClient(Number(id));
     getMember(Number(id))
-      .then((m) => { if (!ok) return; setMember(m); warmClient(Number(id)); })
+      .then((m) => { if (!ok) return; setMember(m); })
       .catch((e) => { if (ok && String((e as Error).message).includes("401")) setLocked(true); });
     return () => { ok = false; };
   }, [id]);
