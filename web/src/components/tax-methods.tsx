@@ -67,24 +67,26 @@ function SrsCard({
   residency: Residency;
   setResidency: (r: Residency) => void;
 }) {
-  const [result, setResult] = useState<TaxRelief | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
   const cap = SRS_CAP[residency];
 
-  async function estimate() {
-    setErr(null);
-    setLoading(true);
-    try {
-      const r = await taxReliefCalc({ income, srs_contribution: amount, residency });
-      setResult(r);
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Computed live (no network round-trip) so the estimate can never sit blank
+  // — same dollar-for-dollar SRS relief math as the backend's /tax/relief.
+  const result: TaxRelief = (() => {
+    const srsBucket = Math.min(amount, cap);
+    const total = Math.min(srsBucket, PERSONAL_RELIEF_CAP);
+    const { tax: taxBefore, marginal } = computeIncomeTax(income);
+    const { tax: taxAfter } = computeIncomeTax(Math.max(income - total, 0));
+    return {
+      relief_earned: 0,
+      remaining_cap: 0,
+      estimated_tax_saved: taxBefore - taxAfter,
+      marginal_rate: marginal,
+      srs_relief: srsBucket,
+      srs_remaining_cap: cap - srsBucket,
+      total_relief: total,
+      personal_cap_hit: srsBucket > PERSONAL_RELIEF_CAP,
+    };
+  })();
 
   return (
     <div className={cardCls}>
@@ -128,11 +130,8 @@ function SrsCard({
           className={inputCls}
           aria-label="SRS top-up amount"
         />
-        <button onClick={estimate} disabled={loading} className={btnCls}>
-          {loading ? "Estimating…" : "Estimate"}
-        </button>
       </div>
-      {result && (
+      {result.srs_relief > 0 && (
         <div role="status" className="space-y-0.5">
           <p className="text-sm font-medium text-[var(--color-primary)]">
             Est. tax saved: {sgd(result.estimated_tax_saved)}{" "}
@@ -154,11 +153,6 @@ function SrsCard({
             </p>
           )}
         </div>
-      )}
-      {err && (
-        <p role="alert" className="text-sm text-[var(--color-error)]">
-          {err}
-        </p>
       )}
     </div>
   );
@@ -544,7 +538,7 @@ export function TaxMethods({ initialResidency = "citizen" }: { initialResidency?
         <AmountTaxCard
           uid="charity"
           income={income}
-          title="Donate to charities"
+          title="Donate to Charities"
           description="Donations to approved IPCs get a 250% tax deduction."
           inputLabel="Donation amount (S$)"
           amount={charity}
@@ -564,7 +558,7 @@ export function TaxMethods({ initialResidency = "citizen" }: { initialResidency?
         <AmountTaxCard
           uid="vhr"
           income={income}
-          title="Voluntary housing refund"
+          title="Voluntary Housing Refund (VHF)"
           description="Refund CPF used for housing (principal + accrued interest) back to your OA."
           inputLabel="Refund amount (S$)"
           amount={vhr}
