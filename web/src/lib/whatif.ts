@@ -60,7 +60,9 @@ export function buildScenario(
       const tStart = sa.transferStartAge ?? sa.startAge;
       if (y.age >= tStart && y.age < tStart + sa.years) extraEnd += sa.transfer;
     }
-    if (retClosing(y) + extraEnd >= projFrs(y.year)) stopped = true;
+    // frsInfo.frs starts at 0 until the policy fetch resolves — guard against
+    // treating that placeholder as "already at FRS" and zeroing the top-up out.
+    if (frsInfo.frs > 0 && retClosing(y) + extraEnd >= projFrs(y.year)) stopped = true;
     saExtra.set(y.age, extraEnd);
     extraPrev = extraEnd;
   }
