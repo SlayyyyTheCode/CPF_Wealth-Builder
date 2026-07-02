@@ -9,6 +9,7 @@ import { PageHeading, MillionaireIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { useAdmin } from "@/lib/admin";
 import { sgd, sgdCompact } from "@/lib/format";
+import { buildScenario, getWhatIf } from "@/lib/whatif";
 
 // ── CPF constants (mirror api/app/engines: interest.py / cpflife.py) ──────────
 const OA_RATE = 0.025;
@@ -132,6 +133,20 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
   const currentYear = years[0].year;
   const yearForAge = (age: number) => currentYear + (age - currentAge);
 
+  // Actual engine-projected RA at 55 — same trajectory Overview's "Projected
+  // at 55" is built from, instead of a separate ERS-assumption formula.
+  const raAt55Actual = currentAge >= 55
+    ? Math.round(member.balances.RA)
+    : Math.round(years.find((y) => y.age === 55)?.closing.RA ?? proj(ers, yearForAge(55)));
+
+  // Same trajectory, but with the Overview "What-If Scenario" top-ups applied
+  // (OA/SA/MA what-if calculators saved from those tabs).
+  const frsInfo = { frs, sumRate, baseYear };
+  const scenRows = buildScenario(years, getWhatIf(Number(id)), frsInfo);
+  const raAt55Scenario = currentAge >= 55
+    ? raAt55Actual
+    : Math.round(scenRows.find((r) => r.age === 55)?.scenRa ?? raAt55Actual);
+
   return (
     <>
       <PageHeading
@@ -144,7 +159,19 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
       <IncomePlanner id={Number(id)} ers={ers} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
       <TransferCard member={member} frs={proj(frs, currentYear)} bhs={bhs} />
       <CpfisCard member={member} />
-      <WhatIfCard ers={ers} proj={proj} yearForAge={yearForAge} memberRa={member.balances.RA} currentAge={currentAge} />
+      <CpfisWhatIfCard member={member} />
+      <WhatIfCard
+        uid="wi-proj"
+        title="Projected CPF LIFE Delay Payouts (65 → 70)"
+        description="Every year you defer past 65 raises your payout by ~7% — up to +35% at age 70 — permanently. The RA also keeps compounding at 4% while you wait. RA at 55 defaults to your actual projected trajectory (same as Overview's “Projected at 55”)."
+        defaultRa55={raAt55Actual}
+      />
+      <WhatIfCard
+        uid="wi-hypo"
+        title="Hypothetical CPF LIFE Delay Payouts (65 → 70)"
+        description="Same deferral math, but starting from the RA under Overview's “What-If Scenario” (your OA/SA/MA top-up calculators applied) instead of the actual projected trajectory."
+        defaultRa55={raAt55Scenario}
+      />
       <OptimizerSection member={member} ers={ers} bhs={bhs} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
       <WithdrawalTimeline member={member} ers={ers} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
 
@@ -506,15 +533,111 @@ function CpfisCard({ member }: { member: Member }) {
   );
 }
 
+// ── 4b. What-If CPFIS-OA Investment Scenario (ignores the SA ≥ $40k gate) ───────
+function CpfisWhatIfCard({ member }: { member: Member }) {
+  const oa = member.balances.OA;
+  const investible = Math.max(oa - 20000, 0);
+  const maxStock = investible * 0.35;
+  const maxGold = investible * 0.1;
+
+  const [invested, setInvested] = useState(Math.round(Math.min(maxStock, investible)));
+  const [ret, setRet] = useState(6);
+  const [result, setResult] = useState<
+    { invested: number; ret: number; rows: { yr: number; investedVal: number; floor: number; total: number }[] } | null
+  >(null);
+
+  function compute() {
+    const r = ret / 100;
+    const floorBase = oa - invested; // kept $20k + uninvested OA, all at 2.5%
+    const rows = [5, 10, 15, 20, 25, 30].map((yr) => {
+      const investedVal = invested * (1 + r) ** yr;
+      const floor = floorBase * (1 + OA_RATE) ** yr;
+      return { yr, investedVal: Math.round(investedVal), floor: Math.round(floor), total: Math.round(investedVal + floor) };
+    });
+    setResult({ invested, ret, rows });
+  }
+
+  const warnings: string[] = [];
+  if (invested > investible) warnings.push(`You can only invest OA above $20,000 — max ${sgd(investible)}.`);
+  if (invested > maxStock) warnings.push(`Stocks are capped at 35% of investible OA (${sgd(maxStock)}); gold at 10% (${sgd(maxGold)}).`);
+
+  return (
+    <section className={`${cardClass} mb-4`} aria-label="What-if CPFIS-OA investment scenario">
+      <h2 className="text-base font-semibold">What-If CPFIS-OA Investment Scenario</h2>
+      <p className="mt-1 text-sm text-[var(--color-muted)]">
+        Same CPFIS-OA math as above, but ignores the &quot;SA ≥ $40,000&quot; eligibility gate — model
+        any amount you choose to invest from OA above $20,000, regardless of your current SA balance.
+        Stocks/gold caps still apply.
+      </p>
+
+      <div className="mt-3 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm sm:grid-cols-3">
+        <div><p className="text-xs text-[var(--color-muted)]">Investible OA (above $20k)</p><p className="font-semibold tabular-nums">{sgd(investible)}</p></div>
+        <div><p className="text-xs text-[var(--color-muted)]">Max stocks (35%)</p><p className="font-semibold tabular-nums">{sgd(maxStock)}</p></div>
+        <div><p className="text-xs text-[var(--color-muted)]">Max gold (10%)</p><p className="font-semibold tabular-nums">{sgd(maxGold)}</p></div>
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="cpwi-amt" className="mb-1 block text-xs font-medium">Amount invested from OA (S$)</label>
+          <input id="cpwi-amt" type="number" min={0} step={1000} value={invested || ""} placeholder="0"
+            onChange={(e) => setInvested(Math.max(0, Number(e.target.value)))} className={inputClass}
+            aria-label="Amount invested from OA (what-if)" />
+        </div>
+        <div>
+          <label htmlFor="cpwi-ret" className="mb-1 block text-xs font-medium">Expected annual return (%/yr)</label>
+          <input id="cpwi-ret" type="number" min={0} max={30} step={0.5} value={ret}
+            onChange={(e) => setRet(Math.max(0, Math.min(30, Number(e.target.value))))} className={inputClass}
+            aria-label="Expected annual return percent (what-if)" />
+        </div>
+      </div>
+
+      {warnings.length > 0 && (
+        <div role="alert" className="mt-3 space-y-1">
+          {warnings.map((w) => <p key={w} className="text-sm text-[var(--color-error)]">⚠ {w}</p>)}
+        </div>
+      )}
+
+      <button onClick={compute} className={`${btnClass} mt-4`}>Compute</button>
+
+      {result && (
+        <div role="status" aria-live="polite" className="mt-4 space-y-4">
+          <div className="grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3">
+            <div><p className="text-xs text-[var(--color-muted)]">Current OA</p><p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(oa)}</p></div>
+            <div><p className="text-xs text-[var(--color-muted)]">Invested OA amount</p><p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(result.invested)}</p></div>
+            <div><p className="text-xs text-[var(--color-muted)]">@ {result.ret}%/yr</p><p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">{sgdCompact(result.rows[result.rows.length - 1].total)} in 30y</p></div>
+          </div>
+
+          <div role="img" aria-label="Expected OA value across years (what-if)" className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={result.rows} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="yr" tick={{ fontSize: 11, fill: "var(--color-muted)" }} tickFormatter={(v) => `${v}y`} />
+                <YAxis tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} tick={{ fontSize: 11, fill: "var(--color-muted)" }} width={52} />
+                <Tooltip formatter={(v, n) => [sgd(typeof v === "number" ? v : null), n === "investedVal" ? "Invested (growth)" : n === "floor" ? "Uninvested OA (2.5%)" : "Total OA"]} labelFormatter={(y) => `After ${y} years`} contentStyle={tooltipStyle} />
+                <Legend formatter={(v) => (v === "investedVal" ? "Invested (growth)" : v === "floor" ? "Uninvested OA (2.5%)" : "Total OA")} wrapperStyle={{ fontSize: "12px" }} />
+                <Line isAnimationActive={false} type="monotone" dataKey="floor" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="investedVal" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="total" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-[var(--color-muted)]">
+        Returns are your assumption, not guaranteed — CPFIS investments can lose money, unlike the
+        2.5% OA floor. This scenario is for modelling only; actual CPFIS-OA investing still requires
+        SA ≥ $40,000 under CPF rules.
+      </p>
+    </section>
+  );
+}
+
 // ── 5. What-if Scenario (CPF LIFE deferral 65→70) ───────────────────────────────
 function WhatIfCard({
-  ers, proj, yearForAge, memberRa, currentAge,
+  uid, title, description, defaultRa55,
 }: {
-  ers: number; proj: (b: number, y: number) => number; yearForAge: (a: number) => number;
-  memberRa: number; currentAge: number;
+  uid: string; title: string; description: string; defaultRa55: number;
 }) {
-  // Base RA at 55: projected ERS, or the member's current RA if already past 55.
-  const defaultRa55 = currentAge >= 55 ? Math.round(memberRa) : Math.round(proj(ers, yearForAge(55)));
   const [ra55, setRa55] = useState(defaultRa55);
   const [plan, setPlan] = useState<Plan>("Standard");
 
@@ -536,23 +659,20 @@ function WhatIfCard({
   );
 
   return (
-    <section className={`${cardClass} mb-4`} aria-label="What-if scenario: CPF LIFE deferral">
-      <h2 className="text-base font-semibold">What-if: delay your CPF LIFE payouts (65 → 70)</h2>
-      <p className="mt-1 text-sm text-[var(--color-muted)]">
-        Every year you defer past 65 raises your payout by ~7% — up to +35% at age 70 — permanently.
-        The RA also keeps compounding at 4% while you wait.
-      </p>
+    <section className={`${cardClass} mb-4`} aria-label={title}>
+      <h2 className="text-base font-semibold">{title}</h2>
+      <p className="mt-1 text-sm text-[var(--color-muted)]">{description}</p>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="wi-ra" className="mb-1 block text-xs font-medium">RA at age 55 (S$)</label>
-          <input id="wi-ra" type="number" min={0} step={10000} value={ra55}
+          <label htmlFor={`${uid}-ra`} className="mb-1 block text-xs font-medium">RA at age 55 (S$)</label>
+          <input id={`${uid}-ra`} type="number" min={0} step={10000} value={ra55}
             onChange={(e) => setRa55(Math.max(0, Number(e.target.value)))} className={inputClass}
             aria-label="RA balance at age 55" />
         </div>
         <div>
-          <label htmlFor="wi-plan" className="mb-1 block text-xs font-medium">CPF LIFE plan</label>
-          <select id="wi-plan" value={plan} onChange={(e) => setPlan(e.target.value as Plan)} className={inputClass} aria-label="CPF LIFE plan">
+          <label htmlFor={`${uid}-plan`} className="mb-1 block text-xs font-medium">CPF LIFE plan</label>
+          <select id={`${uid}-plan`} value={plan} onChange={(e) => setPlan(e.target.value as Plan)} className={inputClass} aria-label="CPF LIFE plan">
             <option value="Standard">Standard (level)</option>
             <option value="Escalating">Escalating (+2%/yr)</option>
           </select>

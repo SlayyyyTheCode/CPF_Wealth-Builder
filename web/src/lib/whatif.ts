@@ -35,11 +35,19 @@ function annuityExtra(amt: number, startAge: number, age: number, rate: number):
 
 const retClosing = (y: YearRow) => (y.closing.RA > 0 ? y.closing.RA : y.closing.SA);
 
-export interface ScenarioRow { age: number; base: number; scen: number }
+// MA can't fund a CPF LIFE payout (or general spending) — kept out of the
+// "payout-eligible" base/scen total and reported separately.
+export interface ScenarioRow {
+  age: number;
+  baseOa: number; scenOa: number;
+  baseRa: number; scenRa: number;   // SA pre-55, RA post-55 (whichever holds the balance)
+  baseMa: number; scenMa: number;
+  base: number; scen: number;       // payout-eligible: OA + SA/RA, excludes MA
+}
 
-/** Per-year combined CPF (OA+SA+MA+RA): baseline vs the what-if scenario.
- *  SA top-up + transfer are applied yearly within their window and stop at the
- *  FRS; OA/MA top-ups are simple yearly annuities. */
+/** Per-year payout-eligible CPF (OA + SA/RA) and MediSave (MA), baseline vs
+ *  the what-if scenario. SA top-up + transfer are applied yearly within their
+ *  window and stop at the FRS; OA/MA top-ups are simple yearly annuities. */
 export function buildScenario(
   years: YearRow[],
   p: WhatIfParams,
@@ -68,10 +76,22 @@ export function buildScenario(
   }
 
   return years.map((y) => {
-    const base = y.closing.OA + y.closing.SA + y.closing.MA + y.closing.RA;
+    const baseOa = y.closing.OA;
+    const baseRa = retClosing(y);
+    const baseMa = y.closing.MA;
     const oaE = p.oa ? annuityExtra(p.oa.topup, p.oa.startAge, y.age, OA_RATE) : 0;
     const maE = p.ma ? annuityExtra(p.ma.topup, p.ma.startAge, y.age, MA_RATE) : 0;
     const saE = saExtra.get(y.age) ?? 0;
-    return { age: y.age, base, scen: base + oaE + maE + saE };
+    const scenOa = baseOa + oaE;
+    const scenRa = baseRa + saE;
+    const scenMa = baseMa + maE;
+    return {
+      age: y.age,
+      baseOa, scenOa,
+      baseRa, scenRa,
+      baseMa, scenMa,
+      base: baseOa + baseRa,
+      scen: scenOa + scenRa,
+    };
   });
 }

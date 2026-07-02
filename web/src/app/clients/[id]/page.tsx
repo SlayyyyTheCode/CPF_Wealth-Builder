@@ -89,6 +89,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
   const selAge = scenAge ?? ages[0];
   const selRow = scenRows.find((r) => r.age === selAge) ?? scenRows[0];
   const scenDelta = selRow ? selRow.scen - selRow.base : 0;
+  const scenMaDelta = selRow ? selRow.scenMa - selRow.baseMa : 0;
 
   return (
     <>
@@ -128,9 +129,10 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
       <section aria-label="What-if scenario" className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-semibold">What-If Scenario</h3>
         <p className="mt-1 text-xs text-[var(--color-muted)]">
-          Combines the Top-up what-if calculators from OA, SA and Medisave. Accounts
-          you haven&apos;t set fall back to their projected balance. Drag to an age to
-          compare the total.
+          Combines the Top-up what-if calculators from OA and SA. Accounts you
+          haven&apos;t set fall back to their projected balance. Drag to an age to
+          compare the total. MediSave (MA) is shown separately below — it can&apos;t
+          fund a CPF LIFE payout or general spending.
         </p>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -149,6 +151,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
             </p>
           </div>
         </div>
+        <p className="mt-2 text-xs text-[var(--color-muted)]">OA + SA/RA only (payout-eligible).</p>
 
         <div className="mt-4">
           <YearScrubber ages={ages} value={selAge} onChange={setScenAge} />
@@ -156,6 +159,29 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
 
         <div className="mt-4">
           <WhatIfScenarioChart rows={scenRows} markerAge={selAge} />
+        </div>
+
+        {/* MediSave (MA) — separate, not payout-eligible */}
+        <div className="mt-4 rounded-xl border border-[var(--color-border)] p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+            MediSave (MA) — age {selAge}, not payout-eligible
+          </p>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Original</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums">{sgd(selRow?.baseMa ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">With what-if</p>
+              <p className="mt-0.5 text-lg font-bold tabular-nums text-[var(--color-primary)]">{sgd(selRow?.scenMa ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-[var(--color-muted)]">Difference</p>
+              <p className={`mt-0.5 text-lg font-bold tabular-nums ${scenMaDelta > 0 ? "text-emerald-600 dark:text-emerald-400" : ""}`}>
+                {scenMaDelta > 0 ? "+" : ""}{sgd(scenMaDelta)}
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
