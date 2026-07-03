@@ -1,6 +1,6 @@
 "use client";
 import { use, useCallback, useEffect, useState } from "react";
-import { getMember, updateMember } from "@/lib/api";
+import { getMember, peekMember, updateMember } from "@/lib/api";
 import type { Member, MemberUpdate, Residency } from "@/lib/types";
 import { dobMMYYYY, ageFromDob } from "@/lib/format";
 import { PageHeading, SettingsIcon } from "@/components/icons";
@@ -9,26 +9,47 @@ import { useAdmin } from "@/lib/admin";
 import { useToast } from "@/components/toast";
 import { ErrorState } from "@/components/error-state";
 
+function fieldsFromMember(m: Member) {
+  return {
+    name: m.name,
+    wage: String(m.monthly_gross_wage),
+    empStatus: m.employment_status,
+    residency: m.residency ?? "citizen",
+    oa: String(m.balances.OA),
+    sa: String(m.balances.SA),
+    ma: String(m.balances.MA),
+    ra: String(m.balances.RA),
+    mortgage: String(m.housing_data?.monthly_mortgage ?? 0),
+    increment: String((m.salary_increment_pct ?? 0) * 100),
+    bonus: String(m.bonus_months ?? 0),
+    access: !!m.special_access,
+  };
+}
+
 export default function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
-  const [member, setMember] = useState<Member | null>(null);
+  // Seed from warm cache (set by warmClient/layout on entering the client) so
+  // switching to Settings doesn't always show the loading skeleton.
+  const cachedMember = peekMember(Number(id));
+  const seed = cachedMember ? fieldsFromMember(cachedMember) : null;
+  const [member, setMember] = useState<Member | null>(() => cachedMember);
   const [err, setErr] = useState<string | null>(null);
 
   // form fields
-  const [name, setName] = useState("");
-  const [wage, setWage] = useState("");
-  const [empStatus, setEmpStatus] = useState("employee");
-  const [residency, setResidency] = useState<Residency>("citizen");
-  const [oa, setOa] = useState("");
-  const [sa, setSa] = useState("");
-  const [ma, setMa] = useState("");
-  const [ra, setRa] = useState("");
-  const [mortgage, setMortgage] = useState(""); // monthly housing mortgage → OA calc
-  const [increment, setIncrement] = useState(""); // salary increment %/yr
-  const [bonus, setBonus] = useState("");         // annual bonus in months
+  const [name, setName] = useState(() => seed?.name ?? "");
+  const [wage, setWage] = useState(() => seed?.wage ?? "");
+  const [empStatus, setEmpStatus] = useState(() => seed?.empStatus ?? "employee");
+  const [residency, setResidency] = useState<Residency>(() => seed?.residency ?? "citizen");
+  const [oa, setOa] = useState(() => seed?.oa ?? "");
+  const [sa, setSa] = useState(() => seed?.sa ?? "");
+  const [ma, setMa] = useState(() => seed?.ma ?? "");
+  const [ra, setRa] = useState(() => seed?.ra ?? "");
+  const [mortgage, setMortgage] = useState(() => seed?.mortgage ?? ""); // monthly housing mortgage → OA calc
+  const [increment, setIncrement] = useState(() => seed?.increment ?? ""); // salary increment %/yr
+  const [bonus, setBonus] = useState(() => seed?.bonus ?? "");         // annual bonus in months
   const [password, setPassword] = useState(""); // set/replace per-client password
-  const [access, setAccess] = useState(false); // CPF Millionaire + self-edit access
+  const [access, setAccess] = useState(() => seed?.access ?? false); // CPF Millionaire + self-edit access
 
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -41,18 +62,19 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
     getMember(Number(id))
       .then((m) => {
         setMember(m);
-        setName(m.name);
-        setWage(String(m.monthly_gross_wage));
-        setEmpStatus(m.employment_status);
-        setResidency(m.residency ?? "citizen");
-        setOa(String(m.balances.OA));
-        setSa(String(m.balances.SA));
-        setMa(String(m.balances.MA));
-        setRa(String(m.balances.RA));
-        setMortgage(String(m.housing_data?.monthly_mortgage ?? 0));
-        setIncrement(String((m.salary_increment_pct ?? 0) * 100));
-        setBonus(String(m.bonus_months ?? 0));
-        setAccess(!!m.special_access);
+        const f = fieldsFromMember(m);
+        setName(f.name);
+        setWage(f.wage);
+        setEmpStatus(f.empStatus);
+        setResidency(f.residency);
+        setOa(f.oa);
+        setSa(f.sa);
+        setMa(f.ma);
+        setRa(f.ra);
+        setMortgage(f.mortgage);
+        setIncrement(f.increment);
+        setBonus(f.bonus);
+        setAccess(f.access);
       })
       .catch((e) => setErr((e as Error).message));
   }, [id]);

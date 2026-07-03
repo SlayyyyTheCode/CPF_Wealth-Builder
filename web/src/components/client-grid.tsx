@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { listMembers } from "@/lib/api";
+import { listMembers, peekMembers } from "@/lib/api";
 import type { MemberSummary } from "@/lib/types";
 import { ClientCard } from "./client-card";
 import { AdminBar } from "./admin-bar";
@@ -9,7 +9,7 @@ import { RocketIcon } from "./icons";
 import { useAdmin } from "@/lib/admin";
 
 export function ClientGrid({ onNew }: { onNew: () => void }) {
-  const [rows, setRows] = useState<MemberSummary[] | null>(null);
+  const [rows, setRows] = useState<MemberSummary[] | null>(() => peekMembers());
   const [q, setQ] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const { isAdmin, login, logout } = useAdmin();

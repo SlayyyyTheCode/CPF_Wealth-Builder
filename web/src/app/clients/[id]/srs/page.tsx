@@ -1,6 +1,6 @@
 "use client";
 import { use, useCallback, useEffect, useState } from "react";
-import { getMember } from "@/lib/api";
+import { getMember, peekMember } from "@/lib/api";
 import { ageFromDob } from "@/lib/format";
 import type { Residency } from "@/lib/types";
 import { PageHeading, SavingsIcon } from "@/components/icons";
@@ -13,8 +13,9 @@ export default function SrsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [currentAge, setCurrentAge] = useState<number | null>(null);
-  const [residency, setResidency] = useState<Residency>("citizen");
+  const cachedMember = peekMember(Number(id));
+  const [currentAge, setCurrentAge] = useState<number | null>(() => cachedMember ? ageFromDob(cachedMember.dob) : null);
+  const [residency, setResidency] = useState<Residency>(() => cachedMember?.residency ?? "citizen");
   const [projectedBalance, setProjectedBalance] = useState(0);
   const [projectedAlt, setProjectedAlt] = useState(0);
 

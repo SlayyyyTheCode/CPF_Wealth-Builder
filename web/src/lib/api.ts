@@ -23,12 +23,45 @@ const _cache = new Map<string, Promise<unknown>>();
 // Resolved values kept alongside the promise so a tab can read warm data
 // *synchronously* on mount (no skeleton flash when switching tabs).
 const _settled = new Map<string, unknown>();
+
+// A page reload wipes this whole in-memory cache — every "first re-open"
+// pays a fresh round-trip even mid-session. Rehydrate from sessionStorage,
+// but ONLY for keys that are safe to persist unauthenticated: the roster
+// (server already masks protected members' balances for non-admins — see
+// list_members in member.py) and policy (public reference data). Per-member
+// profile/simulation/analysis are gated server-side by a memory-only token
+// that's deliberately wiped on reload (auto-lock security requirement) —
+// persisting those would let a reload skip re-entering the client password.
+const SS_PREFIX = "cpf_cache:";
+const persistable = (key: string) => key === "members" || key.startsWith("policy:");
+
+function loadPersisted() {
+  if (typeof window === "undefined") return;
+  try {
+    for (const k of Object.keys(sessionStorage)) {
+      if (!k.startsWith(SS_PREFIX)) continue;
+      const key = k.slice(SS_PREFIX.length);
+      const raw = sessionStorage.getItem(k);
+      if (raw == null) continue;
+      const v = JSON.parse(raw);
+      _settled.set(key, v);
+      _cache.set(key, Promise.resolve(v));
+    }
+  } catch { /* sessionStorage unavailable/corrupt — skip, falls back to network */ }
+}
+loadPersisted();
+
+function persist(key: string, v: unknown) {
+  if (typeof window === "undefined" || !persistable(key)) return;
+  try { sessionStorage.setItem(SS_PREFIX + key, JSON.stringify(v)); } catch { /* quota — skip */ }
+}
+
 function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
   if (!_cache.has(key)) {
     _cache.set(
       key,
       fn()
-        .then((v) => { _settled.set(key, v); return v; })
+        .then((v) => { _settled.set(key, v); persist(key, v); return v; })
         .catch((e) => { _cache.delete(key); throw e; }),
     );
   }
@@ -41,6 +74,13 @@ function peek<T>(key: string): T | null {
 function invalidate(prefix: string) {
   for (const k of _cache.keys()) if (k.startsWith(prefix)) _cache.delete(k);
   for (const k of _settled.keys()) if (k.startsWith(prefix)) _settled.delete(k);
+  if (typeof window !== "undefined") {
+    try {
+      for (const k of Object.keys(sessionStorage)) {
+        if (k.startsWith(SS_PREFIX) && k.slice(SS_PREFIX.length).startsWith(prefix)) sessionStorage.removeItem(k);
+      }
+    } catch { /* ignore */ }
+  }
 }
 function invalidateMember(id: number) {
   invalidate(`member:${id}`);
@@ -105,6 +145,10 @@ export async function adminLogin(username: string, password: string): Promise<vo
 }
 
 export const listMembers = () => cached("members", () => apiGet<MemberSummary[]>("/members"));
+/** Synchronous warm-cache read for the roster — survives a reload via
+ *  sessionStorage (see `persist`/`loadPersisted` above), so the home page
+ *  can paint the client grid on its first frame instead of a skeleton. */
+export const peekMembers = () => peek<MemberSummary[]>("members");
 export const deleteMember = (id: number) =>
   apiDelete(`/members/${id}`).then(() => invalidateMember(id));
 export const getMember = (id: number) =>
