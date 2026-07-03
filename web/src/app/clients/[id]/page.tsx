@@ -84,7 +84,9 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
   const yearAt = (age: number) => res.years.find((y) => y.age === age)?.year;
 
   // Combined what-if scenario, pulling each account's Top-up what-if params.
-  const scenRows = buildScenario(res.years, getWhatIf(Number(id)), frsInfo);
+  // Anchor the first (current-age) row to the member's real balances so
+  // "Original total" matches "Total CPF now" exactly (minus MA).
+  const scenRows = buildScenario(res.years, getWhatIf(Number(id)), frsInfo, member.balances);
   const ages = res.years.map((y) => y.age);
   const selAge = scenAge ?? ages[0];
   const selRow = scenRows.find((r) => r.age === selAge) ?? scenRows[0];

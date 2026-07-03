@@ -47,11 +47,17 @@ export interface ScenarioRow {
 
 /** Per-year payout-eligible CPF (OA + SA/RA) and MediSave (MA), baseline vs
  *  the what-if scenario. SA top-up + transfer are applied yearly within their
- *  window and stop at the FRS; OA/MA top-ups are simple yearly annuities. */
+ *  window and stop at the FRS; OA/MA top-ups are simple yearly annuities.
+ *  `current`, if given, anchors the first row (today's age) to the member's
+ *  actual current balances instead of that year's simulated year-END closing
+ *  balance — so "Original total" at the default age matches "Total CPF now"
+ *  exactly (minus MA, which is reported separately). Every later age is still
+ *  a projection (year-end closing), same as the rest of the app. */
 export function buildScenario(
   years: YearRow[],
   p: WhatIfParams,
   frsInfo: { frs: number; sumRate: number; baseYear: number },
+  current?: { OA: number; SA: number; MA: number; RA: number },
 ): ScenarioRow[] {
   const projFrs = (year: number) =>
     frsInfo.frs * Math.pow(1 + frsInfo.sumRate, Math.max(year - frsInfo.baseYear, 0));
@@ -75,10 +81,11 @@ export function buildScenario(
     extraPrev = extraEnd;
   }
 
-  return years.map((y) => {
-    const baseOa = y.closing.OA;
-    const baseRa = retClosing(y);
-    const baseMa = y.closing.MA;
+  return years.map((y, i) => {
+    const isNow = i === 0 && current != null;
+    const baseOa = isNow ? current!.OA : y.closing.OA;
+    const baseRa = isNow ? (current!.RA > 0 ? current!.RA : current!.SA) : retClosing(y);
+    const baseMa = isNow ? current!.MA : y.closing.MA;
     const oaE = p.oa ? annuityExtra(p.oa.topup, p.oa.startAge, y.age, OA_RATE) : 0;
     const maE = p.ma ? annuityExtra(p.ma.topup, p.ma.startAge, y.age, MA_RATE) : 0;
     const saE = saExtra.get(y.age) ?? 0;
