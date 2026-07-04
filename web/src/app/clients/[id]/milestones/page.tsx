@@ -173,6 +173,90 @@ export default function MilestonesPage({
         sumRate={Number(policy.assumptions?.growth?.sum_rate ?? 0.035)}
         bhsRate={Number(policy.assumptions?.growth?.bhs_rate ?? 0.045)}
       />
+
+      <AccelerationTips
+        bhsGap={Math.max(bhs - bal.MA, 0)}
+        frsGap={Math.max(frs - frsCurrentBal, 0)}
+        ersGap={Math.max(ers - bal.RA, 0)}
+        age={member ? new Date().getFullYear() - new Date(member.dob).getFullYear() : 0}
+      />
     </>
+  );
+}
+
+/* Actionable levers to reach each sum sooner, with today's remaining gaps. */
+function AccelerationTips({
+  bhsGap, frsGap, ersGap, age,
+}: {
+  bhsGap: number; frsGap: number; ersGap: number; age: number;
+}) {
+  const groups = [
+    {
+      title: "Hit the BHS sooner (MediSave)",
+      gap: bhsGap,
+      gapLabel: "MA gap today",
+      tips: [
+        "Make voluntary cash top-ups to MediSave (VC-MA) — dollar-for-dollar tax relief, and the balance earns 4%.",
+        "Pay MediShield Life / Integrated Shield premiums with cash instead of MA where affordable, so the MA keeps compounding.",
+        "Once MA reaches the BHS, all further MA contributions and interest overflow to SA (or OA after FRS) — hitting BHS early accelerates your FRS too.",
+        "Note: the BHS itself rises ~4.5%/yr until age 65, so every year of delay raises the target.",
+      ],
+    },
+    {
+      title: "Hit the FRS sooner (SA/RA)",
+      gap: frsGap,
+      gapLabel: age >= 55 ? "RA gap today" : "SA gap today",
+      tips: [
+        "RSTU cash top-ups to SA — up to $8,000/yr of tax relief for self top-ups (another $8,000 for family), compounding at 4%.",
+        "Transfer OA → SA (irreversible): the same dollars earn 4% instead of 2.5%. Model it in the SA tab's Top-up what-if calculator.",
+        "Minimise OA outflows for housing where possible — every dollar kept earns interest and counts toward the FRS at 55; a Voluntary Housing Refund returns past housing withdrawals (plus accrued interest) to your OA.",
+        "Start early: the first $60k of combined balances earns +1% extra interest — money added in your 30s compounds for decades.",
+      ],
+    },
+    {
+      title: "Reach the ERS (RA, from 55)",
+      gap: ersGap,
+      gapLabel: "RA gap to ERS today",
+      tips: [
+        "From 55, top the RA up to the Enhanced Retirement Sum (cash or OA) — the ERS is the maximum CPF LIFE base and roughly doubles the FRS payout.",
+        "You can top up yearly as the ERS rises (~3.5%/yr) — each January the new ERS opens fresh top-up room.",
+        "Defer CPF LIFE payouts to 70 (+7%/yr, up to +35% permanently) while the RA keeps compounding at 4%.",
+        "Model all of this in the CPF Millionaire tab's planner and delay-payout cards.",
+      ],
+    },
+  ];
+  return (
+    <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
+      <h2 className="text-lg font-bold text-[var(--color-fg)]">How to hit these targets faster</h2>
+      <p className="mt-1 text-sm text-[var(--color-muted)]">
+        The levers that move each milestone, with this client&apos;s remaining gap today.
+      </p>
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        {groups.map((g) => (
+          <div key={g.title} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+            <h3 className="text-sm font-semibold">{g.title}</h3>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              {g.gapLabel}:{" "}
+              <span className={`font-semibold tabular-nums ${g.gap === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-fg)]"}`}>
+                {g.gap === 0 ? "reached ✓" : sgd(g.gap)}
+              </span>
+            </p>
+            <ul className="mt-2 space-y-2 text-sm text-[var(--color-muted)]">
+              {g.tips.map((t) => (
+                <li key={t} className="flex gap-2">
+                  <span aria-hidden="true" className="text-[var(--color-primary)]">•</span>
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-[var(--color-muted)]">
+        Top-ups are capped (SA at the FRS, MA at the BHS, RA at the ERS) and SA/OA→SA transfers are
+        irreversible. Tax relief is subject to the $80,000 personal relief ceiling — see the
+        Optimisation tab.
+      </p>
+    </div>
   );
 }

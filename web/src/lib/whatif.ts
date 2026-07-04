@@ -65,16 +65,28 @@ export function buildScenario(
   // SA/RA extra pot, iterated with the FRS auto-stop. Row 0's threshold check
   // uses the same anchored "now" balance as its displayed base, so the stop
   // decision at today's age is consistent with what's actually shown.
+  //
+  // The OA→SA transfer MOVES money, it doesn't add any: every transferred
+  // dollar that lands in the SA pot must also leave the OA. We track a
+  // parallel "OA outflow" pot compounding at the OA rate — the balance (and
+  // forgone 2.5% interest) the OA no longer has. Without this the combined
+  // total double-counted each year's transfer as free new money.
   const saExtra = new Map<number, number>();
+  const oaOut = new Map<number, number>();
   let extraPrev = 0;
+  let outPrev = 0;
   let stopped = false;
   years.forEach((y, i) => {
     let extraEnd = extraPrev * (1 + SA_RATE);
+    let outEnd = outPrev * (1 + OA_RATE);
     const sa = p.sa;
     if (sa && !stopped) {
       if (y.age >= sa.startAge && y.age < sa.startAge + sa.years) extraEnd += sa.topup;
       const tStart = sa.transferStartAge ?? sa.startAge;
-      if (y.age >= tStart && y.age < tStart + sa.years) extraEnd += sa.transfer;
+      if (y.age >= tStart && y.age < tStart + sa.years) {
+        extraEnd += sa.transfer;
+        outEnd += sa.transfer;
+      }
     }
     const raBase = i === 0 && current != null
       ? (current.RA > 0 ? current.RA : current.SA)
@@ -83,7 +95,9 @@ export function buildScenario(
     // treating that placeholder as "already at FRS" and zeroing the top-up out.
     if (frsInfo.frs > 0 && raBase + extraEnd >= projFrs(y.year)) stopped = true;
     saExtra.set(y.age, extraEnd);
+    oaOut.set(y.age, outEnd);
     extraPrev = extraEnd;
+    outPrev = outEnd;
   });
 
   return years.map((y, i) => {
@@ -94,7 +108,9 @@ export function buildScenario(
     const oaE = p.oa ? annuityExtra(p.oa.topup, p.oa.startAge, y.age, OA_RATE) : 0;
     const maE = p.ma ? annuityExtra(p.ma.topup, p.ma.startAge, y.age, MA_RATE) : 0;
     const saE = saExtra.get(y.age) ?? 0;
-    const scenOa = baseOa + oaE;
+    const outE = oaOut.get(y.age) ?? 0;
+    // OA can't go below zero — a transfer bigger than the OA just drains it.
+    const scenOa = Math.max(baseOa + oaE - outE, 0);
     const scenRa = baseRa + saE;
     const scenMa = baseMa + maE;
     return {
