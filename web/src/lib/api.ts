@@ -18,6 +18,28 @@ const _memberTokens = new Map<number, string>();
 export const setMemberToken = (id: number, t: string) => { _memberTokens.set(id, t); };
 export const getMemberToken = (id: number): string | null => _memberTokens.get(id) ?? null;
 
+// ── inactivity auto-lock ──────────────────────────────────────────────────────
+// After 30 minutes without any API activity, drop BOTH the admin session and
+// every unlocked member token, forcing a re-login. Checked lazily on the next
+// call: the first request after the idle window goes out unauthenticated, the
+// server 401s, and the existing login / password gates take over. The member
+// tokens themselves also expire server-side after 30 minutes as a backstop.
+const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
+const LAST_ACTIVITY_KEY = "cpf_last_activity";
+
+function enforceInactivityLock() {
+  if (typeof window === "undefined") return;
+  const now = Date.now();
+  try {
+    const last = Number(sessionStorage.getItem(LAST_ACTIVITY_KEY) ?? 0);
+    if (last > 0 && now - last > INACTIVITY_LIMIT_MS) {
+      clearToken();            // admin must sign in again
+      _memberTokens.clear();   // protected clients re-lock
+    }
+    sessionStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+  } catch { /* sessionStorage unavailable — skip; server-side expiry still applies */ }
+}
+
 // ── tiny client cache: reuse one projection/member/policy across tab switches ──
 const _cache = new Map<string, Promise<unknown>>();
 // Resolved values kept alongside the promise so a tab can read warm data
@@ -92,6 +114,7 @@ function invalidateMember(id: number) {
 // Prefer the admin token (superuser); else fall back to the member-access token
 // for the client being addressed, so protected-profile calls carry their token.
 function authHeaders(json = false, memberId?: number): Record<string, string> {
+  enforceInactivityLock();
   const h: Record<string, string> = {};
   if (json) h["Content-Type"] = "application/json";
   const t = getToken() ?? (memberId != null ? getMemberToken(memberId) : null);

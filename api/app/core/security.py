@@ -96,13 +96,15 @@ def optional_admin(
 
 # ── per-client (member) access ───────────────────────────────────────────────
 def create_member_token(member_id: int) -> str:
-    """Short-lived token scoped to one member, issued on a correct password."""
+    """Short-lived token scoped to one member, issued on a correct password.
+    Expires after MEMBER_TOKEN_EXPIRE_MINUTES (default 30) so an unlocked
+    protected profile re-locks server-side even if the token leaks."""
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(member_id),
         "role": "member",
         "iat": now,
-        "exp": now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
+        "exp": now + timedelta(minutes=settings.MEMBER_TOKEN_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=_ALGO)
 

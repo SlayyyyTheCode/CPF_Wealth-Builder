@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = "P@ssw0rd2022"
     JWT_SECRET: str = "dev-insecure-change-me-0000000000000000"
     JWT_EXPIRE_MINUTES: int = 720
+    # Member (per-client password) tokens are deliberately short-lived: a
+    # protected profile re-locks 30 minutes after unlock even if the token
+    # leaks. The frontend additionally auto-locks after 30 min of inactivity.
+    MEMBER_TOKEN_EXPIRE_MINUTES: int = 30
 
     @field_validator("DATABASE_URL")
     @classmethod

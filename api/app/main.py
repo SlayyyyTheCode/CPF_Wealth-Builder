@@ -1,11 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.core.config import settings
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="CPF Builder API")
+    # Simulation/analysis responses are large JSON (60+ projection years of
+    # nested balances); gzip cuts them ~10x on the wire, the single biggest
+    # latency win for remote users on slow links.
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_list,

@@ -1,3 +1,6 @@
+import time
+from collections import defaultdict, deque
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,6 +17,31 @@ from app.core.security import (
 )
 
 router = APIRouter(prefix="/members", tags=["members"])
+
+# ── brute-force throttle for password verification ───────────────────────────
+# Sliding window per member id: after MAX_FAILS failed attempts within
+# WINDOW_SECS, further attempts get 429 until the window slides past. Held
+# in-process (per instance) — a distributed attacker across instances still
+# faces bcrypt's cost, this stops cheap single-origin credential stuffing.
+_PW_FAILS: dict[int, deque] = defaultdict(deque)
+_PW_MAX_FAILS = 5
+_PW_WINDOW_SECS = 15 * 60
+
+
+def _pw_throttled(member_id: int) -> bool:
+    q = _PW_FAILS[member_id]
+    now = time.monotonic()
+    while q and now - q[0] > _PW_WINDOW_SECS:
+        q.popleft()
+    return len(q) >= _PW_MAX_FAILS
+
+
+def _pw_record_fail(member_id: int) -> None:
+    _PW_FAILS[member_id].append(time.monotonic())
+
+
+def _pw_clear(member_id: int) -> None:
+    _PW_FAILS.pop(member_id, None)
 
 
 @router.get("", response_model=list[MemberSummaryOut])
@@ -72,7 +100,16 @@ def verify_member_password(member_id: int, payload: PasswordVerify, db: Session 
         raise HTTPException(404, "Member not found")
     if not m.password_hash:
         return {"ok": True, "token": None}  # no password set → open
+    if _pw_throttled(member_id):
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many failed attempts — try again in a few minutes.",
+        )
     ok = verify_password(payload.password, m.password_hash)
+    if ok:
+        _pw_clear(member_id)
+    else:
+        _pw_record_fail(member_id)
     # Issue a member-scoped access token only on success.
     return {"ok": ok, "token": create_member_token(member_id) if ok else None}
 

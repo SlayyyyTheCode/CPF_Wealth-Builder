@@ -93,3 +93,33 @@ def test_list_masks_protected_totals_for_anon(client, anon_client):
     assert rows["Secret"]["current_total"] == 0      # masked
     assert rows["Secret"]["latest_run"] is None
     assert rows["Secret"]["has_password"] is True
+
+
+# ── brute-force throttle on verify-password ──────────────────────────────────
+def test_verify_password_throttles_after_repeated_failures(client, anon_client):
+    from app.routers.member import _PW_FAILS, _PW_MAX_FAILS
+    mid = _create(client, name="Bruted", password="hunter2")
+    _PW_FAILS.pop(mid, None)  # isolate from other tests
+    for _ in range(_PW_MAX_FAILS):
+        r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
+        assert r.status_code == 200 and r.json()["ok"] is False
+    # window full -> even the CORRECT password is rejected with 429
+    r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "hunter2"})
+    assert r.status_code == 429
+    _PW_FAILS.pop(mid, None)
+
+
+def test_verify_password_success_clears_fail_window(client, anon_client):
+    from app.routers.member import _PW_FAILS
+    mid = _create(client, name="Recovers", password="hunter2")
+    _PW_FAILS.pop(mid, None)
+    for _ in range(3):
+        anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
+    r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "hunter2"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert mid not in _PW_FAILS  # success wiped the window
+
+
+def test_member_token_expiry_is_short():
+    from app.core.config import settings
+    assert settings.MEMBER_TOKEN_EXPIRE_MINUTES <= 30
