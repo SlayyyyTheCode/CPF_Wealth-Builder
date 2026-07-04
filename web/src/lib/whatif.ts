@@ -62,11 +62,13 @@ export function buildScenario(
   const projFrs = (year: number) =>
     frsInfo.frs * Math.pow(1 + frsInfo.sumRate, Math.max(year - frsInfo.baseYear, 0));
 
-  // SA/RA extra pot, iterated with the FRS auto-stop.
+  // SA/RA extra pot, iterated with the FRS auto-stop. Row 0's threshold check
+  // uses the same anchored "now" balance as its displayed base, so the stop
+  // decision at today's age is consistent with what's actually shown.
   const saExtra = new Map<number, number>();
   let extraPrev = 0;
   let stopped = false;
-  for (const y of years) {
+  years.forEach((y, i) => {
     let extraEnd = extraPrev * (1 + SA_RATE);
     const sa = p.sa;
     if (sa && !stopped) {
@@ -74,12 +76,15 @@ export function buildScenario(
       const tStart = sa.transferStartAge ?? sa.startAge;
       if (y.age >= tStart && y.age < tStart + sa.years) extraEnd += sa.transfer;
     }
+    const raBase = i === 0 && current != null
+      ? (current.RA > 0 ? current.RA : current.SA)
+      : retClosing(y);
     // frsInfo.frs starts at 0 until the policy fetch resolves — guard against
     // treating that placeholder as "already at FRS" and zeroing the top-up out.
-    if (frsInfo.frs > 0 && retClosing(y) + extraEnd >= projFrs(y.year)) stopped = true;
+    if (frsInfo.frs > 0 && raBase + extraEnd >= projFrs(y.year)) stopped = true;
     saExtra.set(y.age, extraEnd);
     extraPrev = extraEnd;
-  }
+  });
 
   return years.map((y, i) => {
     const isNow = i === 0 && current != null;
