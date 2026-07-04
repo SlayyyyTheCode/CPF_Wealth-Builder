@@ -158,9 +158,13 @@ def update_member(
     if not is_admin:
         data.pop("special_access", None)
     # Optional per-client password set/replace (hash it; never store plaintext).
+    # A reset also clears the brute-force throttle window, so a member the
+    # admin just helped can sign in with the new password immediately instead
+    # of waiting out the 15-minute lockout.
     pw = data.pop("password", None)
     if pw is not None:
         m.password_hash = hash_password(pw) if pw else None
+        _pw_clear(member_id)
     if "balances" in data and data["balances"] is not None:
         m.balances = data.pop("balances")
     else:

@@ -123,3 +123,21 @@ def test_verify_password_success_clears_fail_window(client, anon_client):
 def test_member_token_expiry_is_short():
     from app.core.config import settings
     assert settings.MEMBER_TOKEN_EXPIRE_MINUTES <= 30
+
+
+def test_admin_password_reset_clears_throttle(client, anon_client):
+    from app.routers.member import _PW_FAILS, _PW_MAX_FAILS
+    mid = _create(client, name="LockedOut", password="oldpass")
+    _PW_FAILS.pop(mid, None)
+    for _ in range(_PW_MAX_FAILS):
+        anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
+    # locked out
+    assert anon_client.post(
+        f"/members/{mid}/verify-password", json={"password": "oldpass"}
+    ).status_code == 429
+    # admin resets the password via Settings (PUT with admin token)
+    r = client.put(f"/members/{mid}", json={"password": "newpass"})
+    assert r.status_code == 200, r.text
+    # member can sign in with the new password immediately — no 15-min wait
+    r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "newpass"})
+    assert r.status_code == 200 and r.json()["ok"] is True and r.json()["token"]
