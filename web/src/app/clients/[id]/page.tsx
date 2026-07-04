@@ -139,7 +139,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
 
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">
-            <p className="text-xs text-[var(--color-muted)]">Original total (age {selAge})</p>
+            <p className="text-xs text-[var(--color-muted)]">Current Amount (w/o MA) (age {selAge})</p>
             <p className="mt-0.5 text-xl font-bold tabular-nums">{sgd(selRow?.base ?? 0)}</p>
           </div>
           <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">

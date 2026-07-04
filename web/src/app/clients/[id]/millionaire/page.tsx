@@ -158,7 +158,7 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
       <WhatIfCard
         uid="wi-proj"
         title="Projected CPF LIFE Delay Payouts (65 → 70)"
-        description="Every year you defer past 65 raises your payout by ~7% — up to +35% at age 70 — permanently. The balance also keeps compounding at 4% while you wait. Defaults to Overview's “Original total (age 65)” from the What-If Scenario (OA + SA/RA, payout-eligible)."
+        description="Every year you defer past 65 raises your payout by ~7% — up to +35% at age 70 — permanently. The balance also keeps compounding at 4% while you wait. Defaults to Overview's “Current Amount (w/o MA) (age 65)” from the What-If Scenario (OA + SA/RA, payout-eligible)."
         defaultRa65={raAt65Actual}
       />
       <WhatIfCard

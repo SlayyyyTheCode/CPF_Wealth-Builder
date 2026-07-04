@@ -2,7 +2,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import { getMember, peekMember, updateMember } from "@/lib/api";
 import type { Member, MemberUpdate, Residency } from "@/lib/types";
-import { dobMMYYYY, ageFromDob } from "@/lib/format";
+import { dobMMYYYY, ageFromDob, sgd } from "@/lib/format";
 import { PageHeading, SettingsIcon } from "@/components/icons";
 import { AdminBar } from "@/components/admin-bar";
 import { useAdmin } from "@/lib/admin";
@@ -379,6 +379,18 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Live payout-eligible total — matches Overview's What-If Scenario */}
+          <div className="mt-4 rounded-xl bg-[var(--color-surface-raised)] p-3">
+            <p className="text-xs text-[var(--color-muted)]">Current Amount (w/o MA)</p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums">
+              {sgd((Number(oa) || 0) + (Number(sa) || 0) + (raLocked ? 0 : Number(ra) || 0))}
+            </p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              OA + SA + RA (payout-eligible; MediSave excluded). Same figure as
+              Overview&apos;s What-If Scenario. Updates live as you edit the fields above.
+            </p>
           </div>
         </div>
 
