@@ -133,8 +133,12 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
         <p className="mt-1 text-xs text-[var(--color-muted)]">
           Combines the Top-up what-if calculators from OA and SA. Accounts you
           haven&apos;t set fall back to their projected balance. Drag to an age to
-          compare the total. MediSave (MA) is shown separately below — it can&apos;t
-          fund a CPF LIFE payout or general spending.
+          compare the total.{" "}
+          <span className="font-semibold text-[var(--color-fg)]">
+            These figures exclude the MediSave (MA) account
+          </span>{" "}
+          — MA can&apos;t fund a CPF LIFE payout or general spending, so it is shown
+          separately below and never added into the totals here.
         </p>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -143,7 +147,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
             <p className="mt-0.5 text-xl font-bold tabular-nums">{sgd(selRow?.base ?? 0)}</p>
           </div>
           <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">
-            <p className="text-xs text-[var(--color-muted)]">With what-if (age {selAge})</p>
+            <p className="text-xs text-[var(--color-muted)]">What-If (w/o MA) (age {selAge})</p>
             <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--color-primary)]">{sgd(selRow?.scen ?? 0)}</p>
           </div>
           <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">

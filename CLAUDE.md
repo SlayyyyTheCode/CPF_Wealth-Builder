@@ -28,9 +28,10 @@ npm run dev
 # Backend: Run pytest suite (from api/)
 pytest tests/
 # Run single test file
-pytest tests/test_simulation.py -v
+pytest tests/test_engine_simulation.py -v
 # Run single test
-pytest tests/test_simulation.py::test_cpf_contribution_flow -v
+pytest tests/test_engine_contribution.py::test_contribution_age40_wage6000 -v
+# Engine tests are prefixed test_engine_*; API tests test_*_api; AI tests test_ai_*
 
 # Frontend: Lint (from web/)
 npm run lint
@@ -72,13 +73,21 @@ api/
 ├── app/
 │   ├── main.py                 # FastAPI app factory, route includes
 │   ├── core/config.py          # Settings (CORS, env vars)
-│   ├── engines/                # Core CPF simulation (7 modular engines)
+│   ├── engines/                # Core CPF simulation (modular engines)
 │   │   ├── contribution.py     # Salary + contribution allocation
 │   │   ├── allocation.py       # Age-based OA/SA/MA routing
 │   │   ├── overflow.py         # MA/SA overflow rules + FRS state machine
 │   │   ├── interest.py         # Monthly interest compounding
 │   │   ├── retirement.py       # Age 55 RA transition + CPF LIFE
-│   │   └── ...
+│   │   ├── cpflife.py          # CPF LIFE payout projections
+│   │   ├── growth.py           # BHS/FRS/ERS yearly growth
+│   │   ├── milestones.py       # Age-of-achievement (BHS/FRS/ERS)
+│   │   ├── readiness.py        # Retirement readiness score
+│   │   ├── tax.py / srs.py     # Tax relief + SRS scenarios
+│   │   ├── scenarios.py        # What-if scenario runner
+│   │   ├── policy_resolver.py  # Versioned policy → runtime rates
+│   │   ├── money.py / domain.py / serialize.py  # money math, domain types, JSON
+│   │   └── simulation.py       # Orchestrates the monthly loop
 │   ├── db/                     # SQLAlchemy models + session
 │   │   ├── base.py             # Base ORM class
 │   │   ├── session.py          # get_db() dependency
@@ -93,12 +102,12 @@ api/
 │   │   ├── simulation.py       # POST /members/{id}/simulate
 │   │   ├── analysis.py         # GET /analysis (age of milestones, readiness)
 │   │   ├── policy.py           # GET /policies, POST /policies (admin)
-│   │   ├── auth.py             # Authentication stubs
+│   │   ├── auth.py             # JWT auth (pyjwt + bcrypt), admin login + lockout
 │   │   └── maintenance.py      # /health, schema reset
 │   ├── schemas/                # Pydantic response models
 │   ├── policy/                 # Policy versioning + SEED_2026
 │   └── ai/                     # Claude-powered PDF ingestion + extraction
-├── tests/                      # pytest suite (138 tests green)
+├── tests/                      # pytest suite (~171 tests, green)
 │   ├── conftest.py             # In-memory SQLite + fixtures
 │   ├── test_simulation.py      # Core engine tests
 │   ├── test_ai_*.py            # AI extraction tests
@@ -134,6 +143,8 @@ web/
 │   │   │   ├── settings/       # Client config + salary input
 │   │   │   ├── optimisation/   # Tax relief + tax scenarios
 │   │   │   ├── milestones/     # Age of BHS/FRS/ERS achievement
+│   │   │   ├── srs/            # SRS contribution + tax scenarios
+│   │   │   ├── millionaire/    # CPF millionaire projection
 │   │   │   └── layout.tsx      # Client route wrapper
 │   │   └── admin/              # Admin pages
 │   │       └── policy/         # Policy upload + review
@@ -155,7 +166,7 @@ web/
 └── eslint.config.mjs           # ESLint 9.x config
 ```
 
-**Routes** (7 main):
+**Routes**:
 - `/` — Client roster + create member
 - `/clients/[id]` — Overview (net worth, CPF LIFE projection, milestones)
 - `/clients/[id]/oa` — OA account details + early withdrawal projections
@@ -163,6 +174,10 @@ web/
 - `/clients/[id]/medisave` — Medisave growth + adequacy check (MediShield Life cost)
 - `/clients/[id]/settings` — Salary input, contribution rates, personal data
 - `/clients/[id]/optimisation` — Tax relief strategies + scenario comparison
+- `/clients/[id]/milestones` — Age of BHS/FRS/ERS achievement
+- `/clients/[id]/srs` — SRS contribution + tax scenarios
+- `/clients/[id]/millionaire` — CPF millionaire projection
+- `/admin/policy` — Policy PDF upload + review (admin)
 
 **State Management**: Zustand (minimal; mostly API-driven). Selected member ID in store; rest loaded from backend on route change.
 
