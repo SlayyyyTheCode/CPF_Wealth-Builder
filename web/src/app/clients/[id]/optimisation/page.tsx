@@ -55,7 +55,7 @@ export default function OptimisationPage({
     <>
       <PageHeading
         icon={<OptimiseIcon className="h-7 w-7" />}
-        title="Optimisation"
+        title="Tax Relief Strategies"
         subtitle="Tax estimates assume $0 declared assessable income — add income data for personalised figures."
       />
 

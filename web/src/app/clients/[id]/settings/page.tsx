@@ -241,7 +241,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                 <option value="foreigner">Foreigner</option>
               </select>
               <p className="mt-1 text-xs text-[var(--color-muted)]">
-                Sets the SRS cap in Optimisation (S$15,300 citizen/PR · S$35,700 foreigner).
+                Sets the SRS cap in Tax Relief Strategies (S$15,300 citizen/PR · S$35,700 foreigner).
               </p>
             </div>
 

@@ -255,7 +255,7 @@ function AccelerationTips({
       <p className="mt-3 text-xs text-[var(--color-muted)]">
         Top-ups are capped (SA at the FRS, MA at the BHS, RA at the ERS) and SA/OA→SA transfers are
         irreversible. Tax relief is subject to the $80,000 personal relief ceiling — see the
-        Optimisation tab.
+        Tax Relief Strategies tab.
       </p>
     </div>
   );

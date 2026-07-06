@@ -19,7 +19,7 @@ function buildTabs(clientId: string, millionaire: boolean): TabDef[] {
     { label: "Special Account (SA)", href: `/clients/${clientId}/sa` },
     { label: "Medisave (MA)",       href: `/clients/${clientId}/medisave` },
     { label: "SRS",                 href: `/clients/${clientId}/srs` },
-    { label: "Optimisation",        href: `/clients/${clientId}/optimisation` },
+    { label: "Tax Relief Strategies", href: `/clients/${clientId}/optimisation` },
     { label: "CPF Millionaire",     href: millionaire ? `/clients/${clientId}/millionaire` : null, locked: !millionaire },
     { label: "Settings",            href: `/clients/${clientId}/settings` },
   ];

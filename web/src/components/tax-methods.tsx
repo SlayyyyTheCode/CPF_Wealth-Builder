@@ -576,6 +576,11 @@ export function TaxMethods({ initialResidency = "citizen" }: { initialResidency?
           amount={ns}
           setAmount={setNs}
           multiplier={1}
+          note={
+            "Fixed IRAS amounts — NSman: performed NS activities in the year $3,000 " +
+            "($5,000 if a key appointment holder); did NOT perform NS activities $1,500 " +
+            "($3,500 if a key appointment holder). Wife of an NSman: $750. Parent of an NSman: $750."
+          }
         />
         <TaxAfterDeductionCard income={income} srs={srs} rstu={rstu} charity={charity} parent={parent} ns={ns} />
       </div>
