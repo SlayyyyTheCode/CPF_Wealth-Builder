@@ -10,7 +10,7 @@
   --color-surface: #ffffff;
   --color-surface-raised: #f4f1fb; /* pastel purple tint */
   --color-border: #e7e4f0;
-  --color-muted: #6b7280;
+  --color-muted: #5f6575;          /* slate; ≥5:1 on white AND pale-purple surface-raised (WCAG AA body) */
   --color-fg: #2b2740;
   --color-bg: #faf9fd;
   --color-error: #d1635c;          /* pastel coral (accessible text) */

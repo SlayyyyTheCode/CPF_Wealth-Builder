@@ -185,9 +185,9 @@ export function PageHeading({
       <span className="anim-float grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--color-surface-raised)] text-[var(--color-primary)] shadow-[var(--shadow-card)]">
         {icon}
       </span>
-      <div>
-        <h1 className="text-2xl font-bold leading-tight text-[var(--color-fg)]">{title}</h1>
-        {subtitle && <p className="text-sm text-[var(--color-muted)]">{subtitle}</p>}
+      <div className="min-w-0">
+        <h1 className="text-balance text-xl font-bold leading-tight text-[var(--color-fg)] sm:text-2xl">{title}</h1>
+        {subtitle && <p className="mt-0.5 max-w-2xl text-pretty text-sm text-[var(--color-muted)]">{subtitle}</p>}
       </div>
     </div>
   );
