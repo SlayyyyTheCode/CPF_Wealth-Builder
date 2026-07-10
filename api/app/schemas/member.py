@@ -1,27 +1,33 @@
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+# Sanity caps for user input: generous vs any real CPF figure, tight enough to
+# stop negative/overflow garbage from reaching the simulation engines.
+_MONEY_CAP = 100_000_000
+_WAGE_CAP = 1_000_000  # monthly SGD
 
 
 class Balances(BaseModel):
-    OA: float = 0
-    SA: float = 0
-    MA: float = 0
-    RA: float = 0
+    OA: float = Field(default=0, ge=0, le=_MONEY_CAP)
+    SA: float = Field(default=0, ge=0, le=_MONEY_CAP)
+    MA: float = Field(default=0, ge=0, le=_MONEY_CAP)
+    RA: float = Field(default=0, ge=0, le=_MONEY_CAP)
 
 
 class MemberCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=200)
     dob: date
-    monthly_gross_wage: float
+    monthly_gross_wage: float = Field(ge=0, le=_WAGE_CAP)
     employment_status: str = "employee"
     residency: str = "citizen"  # citizen | pr | foreigner
     balances: Balances = Balances()
     housing_data: dict | None = None
     voluntary_top_ups: list | None = None
     special_access: bool = False
-    salary_increment_pct: float = 0   # yearly raise as a fraction (0.03 = 3%)
-    bonus_months: float = 0           # annual bonus in months of salary
+    # yearly raise as a fraction (0.03 = 3%); 1.0 (+100%/yr) is the sanity roof
+    salary_increment_pct: float = Field(default=0, ge=0, le=1)
+    bonus_months: float = Field(default=0, ge=0, le=24)  # annual bonus in months of salary
     password: str | None = None  # optional per-client password (input only)
 
 
@@ -43,16 +49,16 @@ class MemberOut(BaseModel):
 
 
 class MemberUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
     dob: date | None = None
-    monthly_gross_wage: float | None = None
+    monthly_gross_wage: float | None = Field(default=None, ge=0, le=_WAGE_CAP)
     employment_status: str | None = None
     residency: str | None = None
     balances: Balances | None = None
     housing_data: dict | None = None
     special_access: bool | None = None
-    salary_increment_pct: float | None = None
-    bonus_months: float | None = None
+    salary_increment_pct: float | None = Field(default=None, ge=0, le=1)
+    bonus_months: float | None = Field(default=None, ge=0, le=24)
     password: str | None = None  # set/replace per-client password
 
 
