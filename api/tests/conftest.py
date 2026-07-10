@@ -12,6 +12,7 @@ from app.db.session import get_db
 import app.models.policy as policy_model
 import app.models.member  # noqa: F401  (register table)
 import app.models.simulation  # noqa: F401  (register table)
+import app.models.auth_attempt  # noqa: F401  (register table)
 from app.policy.seed import SEED_2026
 
 

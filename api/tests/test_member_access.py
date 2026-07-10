@@ -97,27 +97,26 @@ def test_list_masks_protected_totals_for_anon(client, anon_client):
 
 # ── brute-force throttle on verify-password ──────────────────────────────────
 def test_verify_password_throttles_after_repeated_failures(client, anon_client):
-    from app.routers.member import _PW_FAILS, _PW_MAX_FAILS
+    from app.routers.member import _PW_MAX_FAILS
     mid = _create(client, name="Bruted", password="hunter2")
-    _PW_FAILS.pop(mid, None)  # isolate from other tests
     for _ in range(_PW_MAX_FAILS):
         r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
         assert r.status_code == 200 and r.json()["ok"] is False
     # window full -> even the CORRECT password is rejected with 429
     r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "hunter2"})
     assert r.status_code == 429
-    _PW_FAILS.pop(mid, None)
 
 
-def test_verify_password_success_clears_fail_window(client, anon_client):
-    from app.routers.member import _PW_FAILS
+def test_verify_password_success_clears_fail_window(client, anon_client, db_session):
+    from app.models.auth_attempt import PasswordAttempt
     mid = _create(client, name="Recovers", password="hunter2")
-    _PW_FAILS.pop(mid, None)
     for _ in range(3):
         anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
     r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "hunter2"})
     assert r.status_code == 200 and r.json()["ok"] is True
-    assert mid not in _PW_FAILS  # success wiped the window
+    # success wiped the window (rows gone from the shared table)
+    rows = db_session.query(PasswordAttempt).filter_by(member_id=mid).count()
+    assert rows == 0
 
 
 def test_member_token_expiry_is_short():
@@ -126,9 +125,8 @@ def test_member_token_expiry_is_short():
 
 
 def test_admin_password_reset_clears_throttle(client, anon_client):
-    from app.routers.member import _PW_FAILS, _PW_MAX_FAILS
+    from app.routers.member import _PW_MAX_FAILS
     mid = _create(client, name="LockedOut", password="oldpass")
-    _PW_FAILS.pop(mid, None)
     for _ in range(_PW_MAX_FAILS):
         anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
     # locked out
@@ -141,3 +139,27 @@ def test_admin_password_reset_clears_throttle(client, anon_client):
     # member can sign in with the new password immediately — no 15-min wait
     r = anon_client.post(f"/members/{mid}/verify-password", json={"password": "newpass"})
     assert r.status_code == 200 and r.json()["ok"] is True and r.json()["token"]
+
+
+def test_throttle_is_shared_not_per_process(client, anon_client, db_session):
+    """The counter must live in the DB, not process memory.
+
+    On Vercel serverless each request can hit a fresh container; an in-process
+    counter would reset and hand the attacker a new allowance every time. Rows
+    in `password_attempts` are the only counter every instance agrees on.
+    """
+    from app.models.auth_attempt import PasswordAttempt
+    mid = _create(client, name="Shared", password="hunter2")
+    for _ in range(3):
+        anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
+    # failures were durably recorded where any instance can see them
+    assert db_session.query(PasswordAttempt).filter_by(member_id=mid).count() == 3
+
+
+def test_deleting_member_removes_its_attempt_rows(client, anon_client, db_session):
+    from app.models.auth_attempt import PasswordAttempt
+    mid = _create(client, name="Doomed", password="hunter2")
+    anon_client.post(f"/members/{mid}/verify-password", json={"password": "wrong"})
+    assert db_session.query(PasswordAttempt).filter_by(member_id=mid).count() == 1
+    assert client.delete(f"/members/{mid}").status_code == 204
+    assert db_session.query(PasswordAttempt).filter_by(member_id=mid).count() == 0

@@ -1,13 +1,13 @@
-import time
-from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.member import MemberProfile
 from app.models.simulation import SimulationRun
+from app.models.auth_attempt import PasswordAttempt
 from app.schemas.member import (
     MemberCreate, MemberOut, MemberSummaryOut, MemberUpdate, PasswordVerify,
 )
@@ -19,29 +19,52 @@ from app.core.security import (
 router = APIRouter(prefix="/members", tags=["members"])
 
 # ── brute-force throttle for password verification ───────────────────────────
-# Sliding window per member id: after MAX_FAILS failed attempts within
-# WINDOW_SECS, further attempts get 429 until the window slides past. Held
-# in-process (per instance) — a distributed attacker across instances still
-# faces bcrypt's cost, this stops cheap single-origin credential stuffing.
-_PW_FAILS: dict[int, deque] = defaultdict(deque)
+# Sliding window per member: after MAX_FAILS failed attempts within
+# WINDOW_SECS, further attempts get 429 until the window slides past.
+#
+# Backed by the `password_attempts` table, NOT process memory. The API runs on
+# Vercel serverless, where each request may hit a different short-lived
+# container; an in-process counter resets with the container, handing an
+# attacker a fresh allowance every time one spins up. The database is the only
+# counter all instances share.
 _PW_MAX_FAILS = 5
 _PW_WINDOW_SECS = 15 * 60
 
 
-def _pw_throttled(member_id: int) -> bool:
-    q = _PW_FAILS[member_id]
-    now = time.monotonic()
-    while q and now - q[0] > _PW_WINDOW_SECS:
-        q.popleft()
-    return len(q) >= _PW_MAX_FAILS
+def _pw_window_start() -> datetime:
+    # server_default=func.now() writes naive UTC; compare naive-to-naive.
+    return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=_PW_WINDOW_SECS)
 
 
-def _pw_record_fail(member_id: int) -> None:
-    _PW_FAILS[member_id].append(time.monotonic())
+def _pw_throttled(db: Session, member_id: int) -> bool:
+    cutoff = _pw_window_start()
+    # Prune expired rows for this member, then count what's left in-window.
+    db.execute(
+        delete(PasswordAttempt).where(
+            PasswordAttempt.member_id == member_id,
+            PasswordAttempt.created_at < cutoff,
+        )
+    )
+    db.commit()
+    n = db.scalar(
+        select(func.count())
+        .select_from(PasswordAttempt)
+        .where(
+            PasswordAttempt.member_id == member_id,
+            PasswordAttempt.created_at >= cutoff,
+        )
+    )
+    return (n or 0) >= _PW_MAX_FAILS
 
 
-def _pw_clear(member_id: int) -> None:
-    _PW_FAILS.pop(member_id, None)
+def _pw_record_fail(db: Session, member_id: int) -> None:
+    db.add(PasswordAttempt(member_id=member_id))
+    db.commit()
+
+
+def _pw_clear(db: Session, member_id: int) -> None:
+    db.execute(delete(PasswordAttempt).where(PasswordAttempt.member_id == member_id))
+    db.commit()
 
 
 @router.get("", response_model=list[MemberSummaryOut])
@@ -100,16 +123,16 @@ def verify_member_password(member_id: int, payload: PasswordVerify, db: Session 
         raise HTTPException(404, "Member not found")
     if not m.password_hash:
         return {"ok": True, "token": None}  # no password set → open
-    if _pw_throttled(member_id):
+    if _pw_throttled(db, member_id):
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "Too many failed attempts — try again in a few minutes.",
         )
     ok = verify_password(payload.password, m.password_hash)
     if ok:
-        _pw_clear(member_id)
+        _pw_clear(db, member_id)
     else:
-        _pw_record_fail(member_id)
+        _pw_record_fail(db, member_id)
     # Issue a member-scoped access token only on success.
     return {"ok": ok, "token": create_member_token(member_id) if ok else None}
 
@@ -131,12 +154,14 @@ def delete_member(member_id: int, db: Session = Depends(get_db), _: str = Depend
     m = db.get(MemberProfile, member_id)
     if not m:
         raise HTTPException(404, "Member not found")
-    # remove dependent simulation runs first (no DB-level cascade)
+    # remove dependent rows first (SQLite doesn't enforce ON DELETE CASCADE
+    # unless PRAGMA foreign_keys is on, so don't rely on it)
     runs = db.scalars(
         select(SimulationRun).where(SimulationRun.member_id == member_id)
     ).all()
     for r in runs:
         db.delete(r)
+    db.execute(delete(PasswordAttempt).where(PasswordAttempt.member_id == member_id))
     db.delete(m)
     db.commit()
 
@@ -164,7 +189,7 @@ def update_member(
     pw = data.pop("password", None)
     if pw is not None:
         m.password_hash = hash_password(pw) if pw else None
-        _pw_clear(member_id)
+        _pw_clear(db, member_id)
     if "balances" in data and data["balances"] is not None:
         m.balances = data.pop("balances")
     else:
