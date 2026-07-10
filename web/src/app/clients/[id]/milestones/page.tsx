@@ -61,9 +61,11 @@ function ProjectionPanel({
         />
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {rows.map((r) => (
-          <div key={r.label} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+      {/* Columns divided by rules rather than nested cards — a card inside a
+          card flattens the hierarchy instead of reinforcing it. */}
+      <div className="mt-5 grid gap-x-6 gap-y-5 sm:grid-cols-3 sm:divide-x sm:divide-[var(--color-border)]">
+        {rows.map((r, i) => (
+          <div key={r.label} className={i > 0 ? "sm:pl-6" : undefined}>
             <p className="text-xs font-medium text-[var(--color-muted)]">{r.label}</p>
             <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--color-fg)]">{sgd(Math.round(r.proj))}</p>
             <p className="mt-1 text-xs text-[var(--color-muted)]">
@@ -231,9 +233,10 @@ function AccelerationTips({
       <p className="mt-1 text-sm text-[var(--color-muted)]">
         The levers that move each milestone, with this client&apos;s remaining gap today.
       </p>
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        {groups.map((g) => (
-          <div key={g.title} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+      {/* Columns divided by rules rather than nested cards (see note above). */}
+      <div className="mt-5 grid gap-x-6 gap-y-6 lg:grid-cols-3 lg:divide-x lg:divide-[var(--color-border)]">
+        {groups.map((g, i) => (
+          <div key={g.title} className={i > 0 ? "lg:pl-6" : undefined}>
             <h3 className="text-sm font-semibold">{g.title}</h3>
             <p className="mt-1 text-xs text-[var(--color-muted)]">
               {g.gapLabel}:{" "}
@@ -241,11 +244,11 @@ function AccelerationTips({
                 {g.gap === 0 ? "reached ✓" : sgd(g.gap)}
               </span>
             </p>
-            <ul className="mt-2 space-y-2 text-sm text-[var(--color-muted)]">
+            <ul className="mt-3 space-y-2 text-sm text-[var(--color-muted)]">
               {g.tips.map((t) => (
                 <li key={t} className="flex gap-2">
                   <span aria-hidden="true" className="text-[var(--color-primary)]">•</span>
-                  <span>{t}</span>
+                  <span className="text-pretty">{t}</span>
                 </li>
               ))}
             </ul>
