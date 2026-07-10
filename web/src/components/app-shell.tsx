@@ -1,8 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getToken } from "@/lib/api";
+import { useIsAdmin } from "@/lib/admin";
 import { ThemeToggle } from "./theme-toggle";
 
 interface TabDef {
@@ -38,8 +37,9 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   // CPF Millionaire is unlocked for the admin or members granted special access.
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => { setIsAdmin(!!getToken()); }, [pathname]);
+  // useIsAdmin subscribes to the token store, so the tab unlocks the moment the
+  // admin signs in — the old effect only re-checked on a route change.
+  const isAdmin = useIsAdmin();
   const millionaire = isAdmin || specialAccess;
   const tabs = clientId ? buildTabs(clientId, millionaire) : [];
 

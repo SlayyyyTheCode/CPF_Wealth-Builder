@@ -8,8 +8,27 @@ const TOKEN_KEY = "cpf_token";
 // dropped it, forcing re-login and "can't save").
 export const getToken = (): string | null =>
   typeof window === "undefined" ? null : localStorage.getItem(TOKEN_KEY);
-export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
+// The token is external state that React components render from, so expose it
+// as a subscribable store (consumed via useSyncExternalStore in useIsAdmin).
+// Reading it in an effect instead meant a component only noticed a login on its
+// next render pass — the nav tabs, for instance, stayed locked until the user
+// navigated. localStorage's own `storage` event only fires in OTHER tabs, so
+// same-tab writes must notify explicitly.
+const _tokenListeners = new Set<() => void>();
+const _notifyToken = () => _tokenListeners.forEach((l) => l());
+
+export function subscribeToken(cb: () => void): () => void {
+  _tokenListeners.add(cb);
+  if (typeof window !== "undefined") window.addEventListener("storage", cb);
+  return () => {
+    _tokenListeners.delete(cb);
+    if (typeof window !== "undefined") window.removeEventListener("storage", cb);
+  };
+}
+
+export const setToken = (t: string) => { localStorage.setItem(TOKEN_KEY, t); _notifyToken(); };
+export const clearToken = () => { localStorage.removeItem(TOKEN_KEY); _notifyToken(); };
 
 // Per-client access tokens (issued on a correct member password). Held only in
 // memory — wiped on a page refresh/reload, so a protected client must re-enter

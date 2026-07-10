@@ -1,13 +1,19 @@
 "use client";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
+
+// The resolved theme is only known on the client, so the server renders a
+// placeholder. Deriving "mounted" from a store snapshot (server: false,
+// client: true) does that without a setState-in-effect and its extra render.
+const noopSubscribe = () => () => {};
+const useMounted = () =>
+  useSyncExternalStore(noopSubscribe, () => true, () => false);
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [m, setM] = useState(false);
-  useEffect(() => setM(true), []);
-  if (!m) return <span className="h-9 w-9" aria-hidden />;
+  const mounted = useMounted();
+  if (!mounted) return <span className="h-9 w-9" aria-hidden />;
   return (
     <button
       aria-label="Toggle theme"

@@ -51,8 +51,6 @@ function levelAnnuityPv(fromAge: number, toAge: number, rate: number): number {
 // ── shared styles ─────────────────────────────────────────────────────────────
 const cardClass =
   "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]";
-const labelClass = "text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]";
-const kpiClass = "mt-1 text-2xl font-bold tabular-nums";
 const inputClass =
   "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]";
 const btnClass =
@@ -167,7 +165,7 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
         description="Same deferral math, but defaults to Overview's “With what-if (age 65)” from the What-If Scenario — your OA/SA top-up calculators applied."
         defaultRa65={raAt65Scenario}
       />
-      <OptimizerSection member={member} ers={ers} bhs={bhs} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
+      <OptimizerSection member={member} ers={ers} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
       <WithdrawalTimeline member={member} ers={ers} proj={proj} yearForAge={yearForAge} currentAge={currentAge} />
 
       <p className="mt-2 text-xs text-[var(--color-muted)]">
@@ -725,9 +723,9 @@ type ScenarioRow = {
 };
 
 function OptimizerSection({
-  member, ers, bhs, proj, yearForAge, currentAge,
+  member, ers, proj, yearForAge, currentAge,
 }: {
-  member: Member; ers: number; bhs: number;
+  member: Member; ers: number;
   proj: (b: number, y: number) => number; yearForAge: (a: number) => number; currentAge: number;
 }) {
   const [rows, setRows] = useState<ScenarioRow[] | null>(null);

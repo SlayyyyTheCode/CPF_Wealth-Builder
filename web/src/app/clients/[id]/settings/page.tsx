@@ -57,10 +57,14 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   const { isAdmin, login, logout } = useAdmin();
   const toast = useToast();
 
+  // No synchronous setState here: the mount effect calls load() directly, and a
+  // setState in that path triggers an extra render pass before paint. The error
+  // is cleared on success instead; the Retry button clears it eagerly (an event
+  // handler, where setState is the normal thing to do).
   const load = useCallback(() => {
-    setErr(null);
     getMember(Number(id))
       .then((m) => {
+        setErr(null);
         setMember(m);
         const f = fieldsFromMember(m);
         setName(f.name);
@@ -82,7 +86,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
   useEffect(() => { load(); }, [load]);
 
   if (err)
-    return <ErrorState message={err} onRetry={load} />;
+    return <ErrorState message={err} onRetry={() => { setErr(null); load(); }} />;
 
   if (!member)
     return (

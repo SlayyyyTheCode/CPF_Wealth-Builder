@@ -5,10 +5,6 @@ import type { Assumptions } from "@/lib/types";
 // Helpers
 // ---------------------------------------------------------------------------
 
-type DeepKeys<T> = T extends object
-  ? { [K in keyof T]: `${string & K}` | `${string & K}.${DeepKeys<T[K]>}` }[keyof T]
-  : never;
-
 function setNested<T extends object>(obj: T, path: string, value: number): T {
   const [head, ...rest] = path.split(".");
   if (rest.length === 0) {
@@ -18,14 +14,6 @@ function setNested<T extends object>(obj: T, path: string, value: number): T {
     ...obj,
     [head]: setNested((obj as Record<string, object>)[head], rest.join("."), value),
   };
-}
-
-interface FieldDef {
-  key: string;
-  label: string;
-  step: number;
-  min?: number;
-  max?: number;
 }
 
 function NumInput({

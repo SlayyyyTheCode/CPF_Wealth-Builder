@@ -15,6 +15,10 @@ import { getWhatIf, setWhatIf } from "@/lib/whatif";
 // OA base interest floor.
 const OA_RATE = 0.025;
 
+// Stable identity for the "still loading" case — a fresh [] each render would
+// invalidate the memos below on every pass.
+const EMPTY_YEARS: SimResult["years"] = [];
+
 // Estimated extra interest earned on the OA portion of combined CPF balances.
 // Below 55: +1% on the first $60k combined, OA counted first and capped at $20k.
 // 55+:      +2% on the first $30k + 1% on the next $30k, OA still capped at $20k.
@@ -83,22 +87,13 @@ export default function OaPage({
     };
   }, [id]);
 
-  if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
-
-  if (!res || !member || age === null)
-    return (
-      <div className="space-y-3">
-        <div className="h-8 w-40 animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
-        <div className="h-12 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
-        <div className="h-28 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
-        <div className="h-64 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
-        <div className="h-24 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
-      </div>
-    );
-
-  const years = res.years;
-  const ages = years.map((y) => y.age);
-  const yr = years.find((y) => y.age === age);
+  // Hooks must run on EVERY render, so these stay above the early returns
+  // below. Previously they sat after them: on a cold load (no warm cache) the
+  // first render bailed to the skeleton without calling them, and the render
+  // after the data arrived called two extra hooks — "Rendered more hooks than
+  // during the previous render." `years` falls back to a stable empty array so
+  // the memo deps don't change identity while loading.
+  const years = res?.years ?? EMPTY_YEARS;
 
   // Monthly housing mortgage is paid out of OA every month from `mortgageAge`.
   // Each year diverts 12 x mortgage that would otherwise compound at 2.5%, so we
@@ -124,6 +119,22 @@ export default function OaPage({
     () => years.map((y) => ({ age: y.age, oa: Math.round(mortgageByAge.get(y.age)?.closing ?? y.closing.OA) })),
     [years, mortgageByAge],
   );
+
+  if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
+
+  if (!res || !member || age === null)
+    return (
+      <div className="space-y-3">
+        <div className="h-8 w-40 animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+        <div className="h-12 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
+        <div className="h-28 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
+        <div className="h-64 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
+        <div className="h-24 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
+      </div>
+    );
+
+  const ages = years.map((y) => y.age);
+  const yr = years.find((y) => y.age === age);
 
   // KPI values for the selected year (mortgage-adjusted)
   const adj = mortgageByAge.get(age);
