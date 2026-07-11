@@ -185,6 +185,23 @@ export default function OaPage({
   // the selected year, split per account.
   const oaAnnualIn = yr?.contribution_by_account?.OA ?? 0;
   const oaMonthlyIn = oaAnnualIn / 12;
+
+  // ── OA inflows & overflow (mirrors the SA tab's card) ──────────────────────
+  // Same overflow_out fields the SA tab reads, so the two cards always agree:
+  // what the SA tab shows leaving the SA is exactly what this shows arriving.
+  //
+  // OA is the END of the cascade. MediSave overflows once it hits the BHS —
+  // into the SA while that is still below the FRS, and into the OA once the SA
+  // is full. So OA only receives MA money when BOTH caps are reached.
+  const maToOaYear = yr?.overflow_out?.ma_to_oa ?? 0;   // MA past BHS, SA past FRS
+  const saToOaYear = yr?.overflow_out?.sa_to_oa ?? 0;   // SA past FRS (+ the 55 closure)
+  const oaToRaYear = yr?.overflow_out?.oa_to_ra ?? 0;   // age-55 sweep OUT of the OA
+  const oaTotalIn = oaAnnualIn + maToOaYear + saToOaYear;
+  const oaNetFlow = oaTotalIn - oaToRaYear;
+  const upTo = (a: number) => years.filter((y) => y.age <= a);
+  const maToOaCumulative = upTo(age).reduce((s, y) => s + (y.overflow_out?.ma_to_oa ?? 0), 0);
+  const saToOaCumulative = upTo(age).reduce((s, y) => s + (y.overflow_out?.sa_to_oa ?? 0), 0);
+  const hasOaOverflow = maToOaYear > 0 || saToOaYear > 0 || oaToRaYear > 0;
   const cappedWage = Math.min(member.monthly_gross_wage, owCeiling > 0 ? owCeiling : member.monthly_gross_wage);
 
   // Yearly OA top-up from a chosen age, compounded at the OA floor (~2.5%/yr).
@@ -379,6 +396,101 @@ export default function OaPage({
         <p className="mt-3 text-xs text-[var(--color-muted)]">
           Employee + employer contribution flowing to OA this year (from the projection engine), on
           wage capped at the Ordinary Wage ceiling ({sgd(owCeiling)}/mth).
+        </p>
+      </div>
+
+      {/* 3b-ii. OA inflows & overflow — mirrors the SA tab's card */}
+      <div className={`${cardClass} mb-4`}>
+        <h3 className={`${labelClass} mb-3`}>OA inflows &amp; overflow (age {age})</h3>
+
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+          Into the OA
+        </p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Salary + employer → OA</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(oaAnnualIn)}</p>
+            <p className="mt-0.5 text-xs text-[var(--color-muted)]">age-band allocation</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">MA → OA</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(maToOaYear)}</p>
+            <p className="mt-0.5 text-xs text-[var(--color-muted)]">MA past BHS &amp; SA past FRS</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">SA → OA</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(saToOaYear)}</p>
+            <p className="mt-0.5 text-xs text-[var(--color-muted)]">SA past FRS</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Total in</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(oaTotalIn)}</p>
+            <p className="mt-0.5 text-xs text-[var(--color-muted)]">before interest</p>
+          </div>
+        </div>
+
+        <p className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+          Out of the OA
+        </p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">OA → RA (at 55)</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(oaToRaYear)}</p>
+            <p className="mt-0.5 text-xs text-[var(--color-muted)]">
+              {oaToRaYear > 0 ? "SA fell short of the sum" : "SA covered the sum"}
+            </p>
+          </div>
+          <div className="sm:col-span-3">
+            <p className="text-xs text-[var(--color-muted)]">Net flow this year</p>
+            <p
+              className={`mt-0.5 font-semibold tabular-nums ${
+                oaNetFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-error)]"
+              }`}
+            >
+              {oaNetFlow >= 0 ? "+" : ""}{sgd(oaNetFlow)}
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--color-muted)]">in − out, excluding interest</p>
+          </div>
+        </div>
+
+        {(maToOaCumulative > 0 || saToOaCumulative > 0) && (
+          <div className="mt-4 space-y-1 text-sm">
+            {maToOaCumulative > 0 && (
+              <p>
+                <span className="text-[var(--color-muted)]">MA → OA overflow to date: </span>
+                <span className="font-semibold tabular-nums text-[var(--color-primary)]">{sgd(maToOaCumulative)}</span>
+                <span className="text-[var(--color-muted)]"> (already inside the OA balance)</span>
+              </p>
+            )}
+            {saToOaCumulative > 0 && (
+              <p>
+                <span className="text-[var(--color-muted)]">SA → OA overflow to date: </span>
+                <span className="font-semibold tabular-nums text-[var(--color-primary)]">{sgd(saToOaCumulative)}</span>
+                <span className="text-[var(--color-muted)]"> (already inside the OA balance)</span>
+              </p>
+            )}
+          </div>
+        )}
+
+        {!hasOaOverflow && (
+          <p className="mt-4 text-sm text-[var(--color-muted)]">
+            No overflow into or out of the OA this year — MediSave is still below the BHS, or the SA
+            is still below the FRS, so the cascade has not reached the OA yet.
+          </p>
+        )}
+
+        <p className="mt-4 max-w-3xl text-xs text-[var(--color-muted)]">
+          <span className="font-semibold">The OA is the end of the cascade.</span>{" "}
+          MediSave overflows once it reaches the BHS — but into the <em>SA</em> while the SA is still
+          below the FRS. Only when <em>both</em> caps are full does that money reach the OA. The same
+          applies to the SA&apos;s own contributions once it passes the FRS. Overflowed money carries
+          the 4% it earned on the way, then compounds at the OA rate (2.5% + extra interest) from
+          here. At 55 the RA is formed from the SA first, and the OA is drawn on only if the SA falls
+          short of the retirement sum.{" "}
+          <span className="font-semibold">
+            These are the same figures the SA tab reports leaving the SA
+          </span>{" "}
+          — one engine, so the two tabs always reconcile.
         </p>
       </div>
 
