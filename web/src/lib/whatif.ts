@@ -25,6 +25,14 @@ export interface OaInvestParams {
   /** Display-only: deflates the OA-tab chart into today's dollars. Not applied
    *  to the Overview scenario, which stays nominal like the rest of the app. */
   inflationPct?: number;
+  /** Whether Overview's What-If Scenario should apply this investment.
+   *
+   *  Unlike the other calculators, this one has no natural "zero": its defaults
+   *  (keep $20k, return 10%) describe a REAL investment, so simply opening the
+   *  OA tab used to write an active scenario and silently inflate the Overview
+   *  total with a 10% return the user never asked for. Absent/false means the
+   *  calculator is a local preview only and contributes nothing. */
+  enabled?: boolean;
 }
 
 /** Today's-dollars value of `nominal` received `years` from now. */
@@ -132,6 +140,11 @@ export function simulateOaSplit(
   years: YearRow[],
   p: OaInvestParams,
   mortgage?: OaMortgageParams,
+  /** Cumulative OA (by age) already claimed by OTHER levers — today, the
+   *  OA→SA transfer. Without it this split treats the full OA as investable
+   *  while the transfer is moving the same dollars into the SA, so the scenario
+   *  earns investment returns on money it also transferred away. */
+  extraDrainByAge?: Map<number, number>,
 ): OaSplitRow[] {
   const r = p.ratePct / 100;
   const startIdx = years.findIndex((y) => y.age >= p.startAge);
@@ -154,7 +167,14 @@ export function simulateOaSplit(
     return cum;
   };
 
-  const oaStart = Math.max(years[startIdx].closing.OA - drainedBy(years[startIdx].age), 0);
+  // OA claimed by other levers (the OA→SA transfer) — same treatment as the
+  // mortgage: it is gone from the OA, so it cannot also be invested.
+  const otherDrain = (age: number) => extraDrainByAge?.get(age) ?? 0;
+
+  const oaStart = Math.max(
+    years[startIdx].closing.OA - drainedBy(years[startIdx].age) - otherDrain(years[startIdx].age),
+    0,
+  );
   let oaOnly = oaStart;
   let retained = Math.min(Math.max(p.keepInOa, 0), oaStart);
   let invested = Math.max(oaStart - Math.max(p.keepInOa, 0), 0);
@@ -201,8 +221,18 @@ export function simulateOaSplit(
     // at zero: the OA cannot go negative.
     const mort = y.age >= mortFrom ? mortAnnual : 0;
 
-    oaOnly = Math.max(oaOnly + oaYearInterest(oaOnly, y.age) + contrib - mort, 0);
-    retained = Math.max(retained + oaYearInterest(retained, y.age) + toOa - mort, 0);
+    // This year's OA→SA transfer. extraDrainByAge is CUMULATIVE and already
+    // carries the forgone 2.5%, so take the increment net of that growth —
+    // subtracting the cumulative every year would remove it over and over.
+    const prevAge = years[i - 1].age;
+    const transferOut = Math.max(
+      otherDrain(y.age) - otherDrain(prevAge) * (1 + OA_RATE),
+      0,
+    );
+    const drain = mort + transferOut;
+
+    oaOnly = Math.max(oaOnly + oaYearInterest(oaOnly, y.age) + contrib - drain, 0);
+    retained = Math.max(retained + oaYearInterest(retained, y.age) + toOa - drain, 0);
     invested = invested * (1 + r) + toInvest;
 
     // Age 55: the RA is filled from the SA first, and the OA is drawn on only
@@ -289,16 +319,6 @@ export function buildScenario(
   // when the money is simply sitting in another account. The two lines sweep
   // different amounts (CPFIS holdings are not liquidated, so the investing line
   // keeps more outside the RA), and the total-wealth gap is what Overview wants.
-  const invGap = new Map<number, number>();
-  if (p.oaInvest) {
-    // Same mortgage the OA tab uses, so both agree on how much OA there is to
-    // split. It drains both lines equally, so it cancels out of this gap — but
-    // it does change how much can be invested in the first place.
-    for (const row of simulateOaSplit(years, p.oaInvest, p.oaMortgage)) {
-      invGap.set(row.age, row.totalSplit - row.totalOnly);
-    }
-  }
-
   const saExtra = new Map<number, number>();
   const oaOut = new Map<number, number>();
   let extraPrev = 0;
@@ -327,6 +347,22 @@ export function buildScenario(
     extraPrev = extraEnd;
     outPrev = outEnd;
   });
+
+  // CPFIS-OA investing: take the GAP between the two lines of one simulation
+  // (totals, so the age-55 RA sweep reads as a move rather than a loss), never
+  // the invested pot on its own — its principal is OA money the baseline is
+  // already growing, so adding the whole pot would double-count it.
+  //
+  // Gated on `enabled`: the defaults describe a real 10% investment, so an
+  // un-engaged calculator must contribute nothing rather than silently inflate
+  // the total. `oaOut` goes in as the drain so the split can only invest OA
+  // that the OA→SA transfer has not already taken.
+  const invGap = new Map<number, number>();
+  if (p.oaInvest?.enabled) {
+    for (const row of simulateOaSplit(years, p.oaInvest, p.oaMortgage, oaOut)) {
+      invGap.set(row.age, row.totalSplit - row.totalOnly);
+    }
+  }
 
   return years.map((y, i) => {
     const isNow = i === 0 && current != null;

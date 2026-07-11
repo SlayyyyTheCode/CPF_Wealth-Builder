@@ -62,6 +62,11 @@ export default function OaPage({
   const [invRate, setInvRate] = useState<number>(() => savedInv?.ratePct ?? 10);
   const [invMonthly, setInvMonthly] = useState<number>(() => savedInv?.monthly ?? 0);
   const [invInflation, setInvInflation] = useState<number>(() => savedInv?.inflationPct ?? 3);
+  // Whether the Overview's What-If Scenario applies this investment. Default OFF:
+  // the defaults here (keep $20k, 10% return) describe a REAL investment, not a
+  // no-op, so merely opening this tab must not silently inflate the Overview
+  // total. Editing any investment input opts in automatically.
+  const [invEnabled, setInvEnabled] = useState<boolean>(() => savedInv?.enabled ?? false);
   // The card's own timeline — independent of the page-wide "Select year" above.
   const [invViewAge, setInvViewAge] = useState<number | null>(null);
 
@@ -77,11 +82,11 @@ export default function OaPage({
     setWhatIf(Number(id), {
       oaInvest: {
         keepInOa: invKeep, startAge: invAge, ratePct: invRate,
-        monthly: invMonthly, inflationPct: invInflation,
+        monthly: invMonthly, inflationPct: invInflation, enabled: invEnabled,
       },
       oaMortgage: { monthly: mortgageMth, startAge: mortgageAge },
     });
-  }, [id, invKeep, invAge, invRate, invMonthly, invInflation, mortgageMth, mortgageAge]);
+  }, [id, invKeep, invAge, invRate, invMonthly, invInflation, invEnabled, mortgageMth, mortgageAge]);
 
   // Scrubber state — seed from warm cache so the page paints fully on tab switch.
   const [age, setAge] = useState<number | null>(() => peekSim(Number(id))?.result.years[0]?.age ?? null);
@@ -248,10 +253,18 @@ export default function OaPage({
   // editable and each derives the other, clamped to the OA actually available —
   // so no entry can invent money.
   const investedAtStart = Math.max(oaAtInvAge - Math.max(Math.round(invKeep), 0), 0);
-  const setKeepInOa = (v: number) =>
+  // Touching any investment input opts the scenario into the Overview — the
+  // user has clearly engaged with it, so they shouldn't have to find a toggle.
+  const setKeepInOa = (v: number) => {
     setInvKeep(Math.round(Math.min(Math.max(v, 0), oaAtInvAge)));
-  const setInitialInvestment = (v: number) =>
+    setInvEnabled(true);
+  };
+  const setInitialInvestment = (v: number) => {
     setInvKeep(Math.round(Math.max(oaAtInvAge - Math.min(Math.max(v, 0), oaAtInvAge), 0)));
+    setInvEnabled(true);
+  };
+  const setRateOfReturn = (v: number) => { setInvRate(v); setInvEnabled(true); };
+  const setMonthlyInvest = (v: number) => { setInvMonthly(v); setInvEnabled(true); };
 
   // Card-local timeline (defaults to the last projected age).
   const invAges = splitRows.map((r) => r.age);
@@ -757,7 +770,7 @@ export default function OaPage({
               max={30}
               step={0.5}
               value={invRate}
-              onChange={setInvRate}
+              onChange={setRateOfReturn}
               className={inputClass}
               aria-label="Assumed annual rate of return, percent"
             />
@@ -773,7 +786,7 @@ export default function OaPage({
               step={100}
               value={invMonthly}
               placeholder="0"
-              onChange={setInvMonthly}
+              onChange={setMonthlyInvest}
               className={inputClass}
               aria-label="Monthly amount routed from OA contributions into the investment"
             />
@@ -810,6 +823,25 @@ export default function OaPage({
             ))}
           </ul>
         )}
+
+        {/* Opt-in to the Overview scenario. Off by default — see invEnabled. */}
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3">
+          <input
+            type="checkbox"
+            checked={invEnabled}
+            onChange={(e) => setInvEnabled(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-primary)]"
+            aria-label="Apply this investment to the Overview What-If Scenario"
+          />
+          <span className="text-sm">
+            <span className="font-semibold">Apply to the Overview What-If Scenario</span>
+            <span className="block text-xs text-[var(--color-muted)]">
+              {invEnabled
+                ? "Included in the Overview total. Untick to keep this card as a preview only."
+                : "Off — this card is a preview only and does not change the Overview total. Editing any field above turns it on."}
+            </span>
+          </span>
+        </label>
 
         {/* Drag timeline — this card's own age selector */}
         {invAges.length > 1 && (
