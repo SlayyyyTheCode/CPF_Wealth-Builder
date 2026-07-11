@@ -116,7 +116,19 @@ export function simulateOaSplit(years: YearRow[], p: OaInvestParams): OaSplitRow
 
   for (let i = startIdx + 1; i < years.length; i++) {
     const y = years[i];
-    const contrib = y.contribution_by_account?.OA ?? 0;
+    // OA inflow is NOT just the wage allocation. Once the MA fills to the BHS
+    // its excess cascades out — to the SA while that is under the FRS, then to
+    // the OA — and from 55 the SA/RA slice above the FRS spills to the OA too.
+    // The engine tracks that overflow SEPARATELY from contribution_by_account
+    // (which is explicitly "before any overflow out"), so reading only the
+    // contribution silently dropped every overflowed dollar. It matters: with a
+    // full MA it is worth more than half the wage allocation again. The
+    // overflow already carries the MA/SA 4% interest, since a full MA's
+    // year-end interest overflows through the same path.
+    const wageIn = y.contribution_by_account?.OA ?? 0;
+    const overflowIn =
+      (y.overflow_out?.ma_to_oa ?? 0) + (y.overflow_out?.sa_to_oa ?? 0);
+    const contrib = wageIn + overflowIn;
     // Reroute at most what actually flows in — never create money.
     const toInvest = Math.min(Math.max(p.monthly, 0) * 12, contrib);
     const toOa = contrib - toInvest;
