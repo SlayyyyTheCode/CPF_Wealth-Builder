@@ -33,11 +33,17 @@ export const realValue = (nominal: number, inflationPct: number, years: number) 
     ? nominal
     : nominal / (1 + inflationPct / 100) ** years;
 
+/** Monthly housing mortgage paid out of the OA (OA tab). Persisted so the
+ *  Overview's scenario drains the OA on exactly the same schedule the OA tab
+ *  charts — otherwise the two disagree about how much OA there is to invest. */
+export interface OaMortgageParams { monthly: number; startAge: number }
+
 export interface WhatIfParams {
   oa?: OaParams;
   sa?: SaParams;
   ma?: MaParams;
   oaInvest?: OaInvestParams;
+  oaMortgage?: OaMortgageParams;
 }
 
 // ── CPFIS hard rules (cpf.gov.sg) ────────────────────────────────────────────
@@ -122,12 +128,33 @@ export interface OaSplitRow {
  *  OA->RA sweep. Both would hit the two lines identically, so the GAP between
  *  them — which is what the comparison is for, and what Overview consumes —
  *  stays correct; only the absolute levels past 55 run high. */
-export function simulateOaSplit(years: YearRow[], p: OaInvestParams): OaSplitRow[] {
+export function simulateOaSplit(
+  years: YearRow[],
+  p: OaInvestParams,
+  mortgage?: OaMortgageParams,
+): OaSplitRow[] {
   const r = p.ratePct / 100;
   const startIdx = years.findIndex((y) => y.age >= p.startAge);
   if (startIdx < 0) return [];
 
-  const oaStart = years[startIdx].closing.OA;
+  // The OA you can actually split is the balance AFTER the housing mortgage has
+  // taken its cut — the same figure the OA tab shows as the year's closing
+  // balance. Seeding from the raw engine balance would let the scenario invest
+  // money the mortgage has already spent.
+  const mortAnnual = Math.max(mortgage?.monthly ?? 0, 0) * 12;
+  const mortFrom = mortgage?.startAge ?? Infinity;
+  const drainedBy = (age: number): number => {
+    // Forgone OA (the payments plus the 2.5% they would have earned) by `age`.
+    if (mortAnnual <= 0) return 0;
+    let cum = 0;
+    for (const y of years) {
+      if (y.age > age) break;
+      cum = cum * (1 + OA_RATE) + (y.age >= mortFrom ? mortAnnual : 0);
+    }
+    return cum;
+  };
+
+  const oaStart = Math.max(years[startIdx].closing.OA - drainedBy(years[startIdx].age), 0);
   let oaOnly = oaStart;
   let retained = Math.min(Math.max(p.keepInOa, 0), oaStart);
   let invested = Math.max(oaStart - Math.max(p.keepInOa, 0), 0);
@@ -169,8 +196,13 @@ export function simulateOaSplit(years: YearRow[], p: OaInvestParams): OaSplitRow
     const toInvest = Math.min(Math.max(p.monthly, 0) * 12, contrib);
     const toOa = contrib - toInvest;
 
-    oaOnly = oaOnly + oaYearInterest(oaOnly, y.age) + contrib;
-    retained = retained + oaYearInterest(retained, y.age) + toOa;
+    // The mortgage is paid out of the OA in BOTH lines — it is a housing cost,
+    // not an investment decision, so it must not tilt the comparison. Floored
+    // at zero: the OA cannot go negative.
+    const mort = y.age >= mortFrom ? mortAnnual : 0;
+
+    oaOnly = Math.max(oaOnly + oaYearInterest(oaOnly, y.age) + contrib - mort, 0);
+    retained = Math.max(retained + oaYearInterest(retained, y.age) + toOa - mort, 0);
     invested = invested * (1 + r) + toInvest;
 
     // Age 55: the RA is filled from the SA first, and the OA is drawn on only
@@ -259,7 +291,10 @@ export function buildScenario(
   // keeps more outside the RA), and the total-wealth gap is what Overview wants.
   const invGap = new Map<number, number>();
   if (p.oaInvest) {
-    for (const row of simulateOaSplit(years, p.oaInvest)) {
+    // Same mortgage the OA tab uses, so both agree on how much OA there is to
+    // split. It drains both lines equally, so it cancels out of this gap — but
+    // it does change how much can be invested in the first place.
+    for (const row of simulateOaSplit(years, p.oaInvest, p.oaMortgage)) {
       invGap.set(row.age, row.totalSplit - row.totalOnly);
     }
   }

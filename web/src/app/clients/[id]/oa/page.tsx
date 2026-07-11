@@ -65,20 +65,23 @@ export default function OaPage({
   // The card's own timeline — independent of the page-wide "Select year" above.
   const [invViewAge, setInvViewAge] = useState<number | null>(null);
 
+  // Monthly housing mortgage — paid from OA every month from `mortgageAge`,
+  // reducing the OA balance/interest shown across the page.
+  const [mortgageMth, setMortgageMth] = useState<number>(0);
+  const [mortgageAge, setMortgageAge] = useState<number>(0);
+
   // Persist so the Overview's What-If Scenario reflects this calculator too.
+  // The mortgage goes in as well: it decides how much OA is actually left to
+  // invest, so the two tabs must drain the OA on the same schedule.
   useEffect(() => {
     setWhatIf(Number(id), {
       oaInvest: {
         keepInOa: invKeep, startAge: invAge, ratePct: invRate,
         monthly: invMonthly, inflationPct: invInflation,
       },
+      oaMortgage: { monthly: mortgageMth, startAge: mortgageAge },
     });
-  }, [id, invKeep, invAge, invRate, invMonthly, invInflation]);
-
-  // Monthly housing mortgage — paid from OA every month from `mortgageAge`,
-  // reducing the OA balance/interest shown across the page.
-  const [mortgageMth, setMortgageMth] = useState<number>(0);
-  const [mortgageAge, setMortgageAge] = useState<number>(0);
+  }, [id, invKeep, invAge, invRate, invMonthly, invInflation, mortgageMth, mortgageAge]);
 
   // Scrubber state — seed from warm cache so the page paints fully on tab switch.
   const [age, setAge] = useState<number | null>(() => peekSim(Number(id))?.result.years[0]?.age ?? null);
@@ -224,17 +227,31 @@ export default function OaPage({
   // Hypothetical: the real $20k CPFIS floor is NOT enforced here (you asked for
   // it to be lifted so any split can be modelled) — it is shown as guidance
   // instead. Both lines come from one simulation, so the gap is honest.
+  const invMortgage = { monthly: mortgageMth, startAge: mortgageAge };
   const invParams = { keepInOa: invKeep, startAge: invAge, ratePct: invRate, monthly: invMonthly };
-  const splitRows = simulateOaSplit(years, invParams);
-  const oaAtInvAge = years.find((y) => y.age >= invAge)?.closing.OA ?? member.balances.OA;
+  const splitRows = simulateOaSplit(years, invParams, invMortgage);
 
-  // "Initial investment" is the OTHER SIDE of the same split, not extra money:
-  // CPFIS-OA can only be funded from the OA, so investing more means keeping
-  // less. The two inputs are linked (edit either, the other follows) rather
-  // than independent, which would let the scenario invent dollars.
-  const investedAtStart = Math.max(oaAtInvAge - Math.max(invKeep, 0), 0);
+  // The OA available to split is the year's CLOSING balance from "Start/End
+  // Account of the Year" — i.e. AFTER the housing mortgage has taken its cut,
+  // and after interest. Reading the raw engine balance instead would offer up
+  // money the mortgage has already spent. Rounded to whole dollars: the raw
+  // balance carries cents, and deriving one input from the other was pushing
+  // that noise into the fields as long decimal tails.
+  const oaAtInvAge = Math.round(
+    mortgageByAge.get(invAge)?.closing ??
+    years.find((y) => y.age >= invAge)?.closing.OA ??
+    member.balances.OA,
+  );
+
+  // "Initial investment" is the other side of the same split: CPFIS-OA can only
+  // be funded from the OA, so investing more means keeping less. Both fields are
+  // editable and each derives the other, clamped to the OA actually available —
+  // so no entry can invent money.
+  const investedAtStart = Math.max(oaAtInvAge - Math.max(Math.round(invKeep), 0), 0);
+  const setKeepInOa = (v: number) =>
+    setInvKeep(Math.round(Math.min(Math.max(v, 0), oaAtInvAge)));
   const setInitialInvestment = (v: number) =>
-    setInvKeep(Math.max(oaAtInvAge - Math.min(Math.max(v, 0), oaAtInvAge), 0));
+    setInvKeep(Math.round(Math.max(oaAtInvAge - Math.min(Math.max(v, 0), oaAtInvAge), 0)));
 
   // Card-local timeline (defaults to the last projected age).
   const invAges = splitRows.map((r) => r.age);
@@ -683,15 +700,17 @@ export default function OaPage({
             <NumberInput
               id="oa-inv-keep"
               min={0}
+              max={oaAtInvAge}
               step={1000}
-              value={invKeep}
+              value={Math.min(Math.round(invKeep), oaAtInvAge)}
               placeholder="0"
-              onChange={setInvKeep}
+              onChange={setKeepInOa}
               className={inputClass}
               aria-label="Amount kept in the OA in Singapore dollars"
             />
             <p className="mt-1 text-xs text-[var(--color-muted)]">
               OA at age {invAge}: {sgd(oaAtInvAge)}
+              {mortgageMth > 0 && <> (after mortgage)</>}
             </p>
           </div>
           <div>
@@ -701,8 +720,9 @@ export default function OaPage({
             <NumberInput
               id="oa-inv-initial"
               min={0}
+              max={oaAtInvAge}
               step={1000}
-              value={Math.round(investedAtStart)}
+              value={investedAtStart}
               placeholder="0"
               onChange={setInitialInvestment}
               className={inputClass}
@@ -1013,8 +1033,15 @@ export default function OaPage({
           <span className="font-semibold">Today&apos;s dollars</span> divides each year by
           (1&nbsp;+&nbsp;inflation)<sup>years</sup> — it shows what the balance would actually buy,
           which is the figure that matters when the OA floor (2.5%) sits close to inflation itself.{" "}
-          <span className="font-semibold">Not modelled:</span> the housing mortgage above. The real
-          $20,000 CPFIS floor is not enforced here — this is a hypothetical scenario.
+          <span className="font-semibold">The housing mortgage is included.</span>{" "}
+          &ldquo;Keep in OA&rdquo; is measured against the year&apos;s closing balance from
+          <em> Start/End Account of the Year</em> above — the OA <em>after</em> the mortgage has
+          taken its cut and interest has been credited — so the scenario never offers up money the
+          mortgage has already spent. The mortgage then keeps draining the OA in <em>both</em> lines,
+          since it is a housing cost rather than an investment decision and must not tilt the
+          comparison.{" "}
+          <span className="font-semibold">Not enforced:</span> the real $20,000 CPFIS floor — this is
+          a hypothetical scenario.
         </p>
       </div>
 
