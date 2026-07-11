@@ -7,7 +7,25 @@ export const OA_RATE = 0.025;
 export const SA_RATE = 0.04;
 export const MA_RATE = 0.04;
 
-export interface OaParams { topup: number; startAge: number }
+/** Yearly voluntary OA top-up (OA tab).
+ *
+ *  HYPOTHETICAL. CPF has no OA-only voluntary top-up: RSTU (whose relief cap is
+ *  the $8,000 this defaults to) goes to the SA/RA, and the only way to put cash
+ *  into the OA is a Voluntary Contribution across all three accounts, split by
+ *  age band and capped by the CPF Annual Limit. Modelled here as a flat yearly
+ *  amount into the OA at the user's request, for scenario work only. */
+export interface OaParams {
+  topup: number;
+  startAge: number;
+  capPerYear?: number;
+}
+
+/** Default cap for the hypothetical OA top-up. */
+export const OA_TOPUP_CAP = 8_000;
+
+/** The top-up actually applied in a year, after the cap. */
+export const cappedTopup = (p: OaParams | undefined): number =>
+  p ? Math.min(Math.max(p.topup, 0), p.capPerYear ?? OA_TOPUP_CAP) : 0;
 export interface MaParams { topup: number; startAge: number }
 export interface SaParams { topup: number; transfer: number; startAge: number; transferStartAge: number; years: number }
 
@@ -145,6 +163,12 @@ export function simulateOaSplit(
    *  while the transfer is moving the same dollars into the SA, so the scenario
    *  earns investment returns on money it also transferred away. */
   extraDrainByAge?: Map<number, number>,
+  /** Voluntary OA top-up. Added to the OA in BOTH lines, so topped-up dollars
+   *  are investable like any other OA dollar. Safe against double-counting:
+   *  buildScenario credits the top-up's own 2.5% growth separately via `oaE`,
+   *  and this function only ever contributes a DIFFERENCE (totalSplit −
+   *  totalOnly), which nets the top-up principal out of both sides. */
+  topup?: OaParams,
 ): OaSplitRow[] {
   const r = p.ratePct / 100;
   const startIdx = years.findIndex((y) => y.age >= p.startAge);
@@ -211,7 +235,11 @@ export function simulateOaSplit(
     // earning the OA rate + extra interest.
     const overflowIn =
       (y.overflow_out?.ma_to_oa ?? 0) + (y.overflow_out?.sa_to_oa ?? 0);
-    const contrib = wageIn + overflowIn;
+    // Voluntary top-up (capped) from its start age — investable like any other
+    // OA dollar, which is the point of feeding it through here.
+    const topIn =
+      topup && y.age >= topup.startAge ? cappedTopup(topup) : 0;
+    const contrib = wageIn + overflowIn + topIn;
     // Reroute at most what actually flows in — never create money.
     const toInvest = Math.min(Math.max(p.monthly, 0) * 12, contrib);
     const toOa = contrib - toInvest;
@@ -359,7 +387,11 @@ export function buildScenario(
   // that the OA→SA transfer has not already taken.
   const invGap = new Map<number, number>();
   if (p.oaInvest?.enabled) {
-    for (const row of simulateOaSplit(years, p.oaInvest, p.oaMortgage, oaOut)) {
+    // p.oa goes in so topped-up dollars are investable too. The top-up lands in
+    // BOTH lines, so it cancels out of the difference below except for the
+    // genuine extra return earned by investing it — its base 2.5% growth is
+    // credited once, separately, as `oaE`.
+    for (const row of simulateOaSplit(years, p.oaInvest, p.oaMortgage, oaOut, p.oa)) {
       invGap.set(row.age, row.totalSplit - row.totalOnly);
     }
   }
@@ -369,7 +401,9 @@ export function buildScenario(
     const baseOa = isNow ? current!.OA : y.closing.OA;
     const baseRa = isNow ? (current!.RA > 0 ? current!.RA : current!.SA) : retClosing(y);
     const baseMa = isNow ? current!.MA : y.closing.MA;
-    const oaE = p.oa ? annuityExtra(p.oa.topup, p.oa.startAge, y.age, OA_RATE) : 0;
+    // Base growth of the top-up at the OA floor. Capped — the OA tab clamps the
+    // input, but a stored value from an older build might exceed it.
+    const oaE = p.oa ? annuityExtra(cappedTopup(p.oa), p.oa.startAge, y.age, OA_RATE) : 0;
     const maE = p.ma ? annuityExtra(p.ma.topup, p.ma.startAge, y.age, MA_RATE) : 0;
     const invE = invGap.get(y.age) ?? 0;
     const saE = saExtra.get(y.age) ?? 0;

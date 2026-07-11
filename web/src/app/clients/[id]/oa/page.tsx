@@ -12,7 +12,7 @@ import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
 import {
   getWhatIf, setWhatIf, simulateOaSplit, realValue,
-  CPFIS_OA_FLOOR, CPFIS_STOCK_LIMIT, CPFIS_GOLD_LIMIT,
+  CPFIS_OA_FLOOR, CPFIS_STOCK_LIMIT, CPFIS_GOLD_LIMIT, OA_TOPUP_CAP,
 } from "@/lib/whatif";
 
 // OA base interest floor.
@@ -52,8 +52,14 @@ export default function OaPage({
 
   // Persist OA what-if params so the Overview can combine all accounts.
   useEffect(() => {
-    setWhatIf(Number(id), { oa: { topup, startAge: topupAge } });
+    setWhatIf(Number(id), {
+      oa: { topup, startAge: topupAge, capPerYear: OA_TOPUP_CAP },
+    });
   }, [id, topup, topupAge]);
+
+  // Hypothetical top-up: clamp to the cap on entry so no path can exceed it.
+  const setTopupCapped = (v: number) =>
+    setTopup(Math.min(Math.max(v, 0), OA_TOPUP_CAP));
 
   // CPFIS-OA investment what-if: keep N in the OA, invest everything above it.
   const savedInv = useMemo(() => getWhatIf(Number(id)).oaInvest, [id]);
@@ -232,9 +238,30 @@ export default function OaPage({
   // Hypothetical: the real $20k CPFIS floor is NOT enforced here (you asked for
   // it to be lifted so any split can be modelled) — it is shown as guidance
   // instead. Both lines come from one simulation, so the gap is honest.
+  // ── When does the SA/MA overflow actually start? ───────────────────────────
+  // Derived from the projection, NOT from a rule of thumb. The intuition
+  // "SA hits FRS => SA spills to OA" is wrong below 55: the SA keeps taking
+  // mandatory contributions past the FRS. What the FRS really gates is the
+  // ROUTING of the MediSave overflow — a full MA skips a full SA and lands in
+  // the OA instead — plus the 55+ RA spill. Reading the first non-zero year
+  // straight from the engine's own numbers avoids guessing.
+  const firstAgeWith = (pick: (y: (typeof years)[number]) => number) =>
+    years.find((y) => pick(y) > 0)?.age ?? null;
+  const maToOaStart = firstAgeWith((y) => y.overflow_out?.ma_to_oa ?? 0);
+  const saToOaStart = firstAgeWith((y) => y.overflow_out?.sa_to_oa ?? 0);
+  const bhsAge = res.milestones?.bhs_age ?? null;
+  const frsAge = res.milestones?.frs_age ?? null;
+  const overflowStart =
+    maToOaStart !== null && saToOaStart !== null
+      ? Math.min(maToOaStart, saToOaStart)
+      : maToOaStart ?? saToOaStart;
+
   const invMortgage = { monthly: mortgageMth, startAge: mortgageAge };
   const invParams = { keepInOa: invKeep, startAge: invAge, ratePct: invRate, monthly: invMonthly };
-  const splitRows = simulateOaSplit(years, invParams, invMortgage);
+  // The voluntary top-up feeds the split too, so topped-up dollars are
+  // investable like any other OA dollar.
+  const invTopup = { topup, startAge: topupAge, capPerYear: OA_TOPUP_CAP };
+  const splitRows = simulateOaSplit(years, invParams, invMortgage, undefined, invTopup);
 
   // The OA available to split is the year's CLOSING balance from "Start/End
   // Account of the Year" — i.e. AFTER the housing mortgage has taken its cut,
@@ -600,13 +627,17 @@ export default function OaPage({
             <NumberInput
               id="oa-topup"
               min={0}
+              max={OA_TOPUP_CAP}
               step={1000}
-              value={topup}
+              value={Math.min(topup, OA_TOPUP_CAP)}
               placeholder="0"
-              onChange={setTopup}
+              onChange={setTopupCapped}
               className={inputClass}
               aria-label="Yearly OA top-up amount in Singapore dollars"
             />
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Capped at {sgd(OA_TOPUP_CAP)}/yr
+            </p>
           </div>
           <div>
             <label htmlFor="oa-topup-age" className="mb-1 block text-sm text-[var(--color-muted)]">
@@ -689,9 +720,72 @@ export default function OaPage({
           </div>
         )}
 
-        <p className="mt-3 text-xs text-[var(--color-muted)]">
+        <p className="mt-3 max-w-3xl text-xs text-[var(--color-muted)]">
           Estimate: starting at the chosen age, each year&apos;s voluntary OA top-up is compounded at
-          the 2.5% OA floor rate and added to the projected balance.
+          the 2.5% OA floor rate and added to the projected balance. It also feeds the CPF-OA
+          Investment calculator below, so topped-up dollars can be invested like any other OA dollar.{" "}
+          <span className="font-semibold">Hypothetical:</span> CPF has no OA-only voluntary top-up.
+          The {sgd(OA_TOPUP_CAP)} figure is the RSTU relief cap, and RSTU goes to the SA/RA — the only
+          way to put cash into the OA is a Voluntary Contribution across all three accounts, split by
+          age band and capped by the CPF Annual Limit. Modelled here as a flat yearly amount for
+          scenario work.
+        </p>
+      </div>
+
+      {/* 8a. When the SA/MA overflow starts feeding the OA */}
+      <div className={`${cardClass} mb-4`}>
+        <h3 className={`${labelClass} mb-3`}>When SA / MA overflow starts feeding the OA</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">MA reaches BHS</p>
+            <p className="mt-0.5 font-semibold tabular-nums">
+              {bhsAge !== null ? `Age ${bhsAge}` : "Not reached"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">SA reaches FRS</p>
+            <p className="mt-0.5 font-semibold tabular-nums">
+              {frsAge !== null ? `Age ${frsAge}` : "Not reached"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">MA → OA begins</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">
+              {maToOaStart !== null ? `Age ${maToOaStart}` : "Never"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">SA → OA begins</p>
+            <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">
+              {saToOaStart !== null ? `Age ${saToOaStart}` : "Never"}
+            </p>
+          </div>
+        </div>
+
+        {overflowStart !== null ? (
+          <p className="mt-3 text-sm">
+            <span className="text-[var(--color-muted)]">Overflow first reaches your OA at </span>
+            <span className="font-semibold text-[var(--color-primary)]">age {overflowStart}</span>
+            <span className="text-[var(--color-muted)]">
+              {" "}— from then on it compounds at 2.5% + extra interest, and is already included in
+              every projection on this page.
+            </span>
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--color-muted)]">
+            No overflow reaches the OA in this projection — MediSave stays below the BHS, or the SA
+            still has room below the FRS.
+          </p>
+        )}
+
+        <p className="mt-3 max-w-3xl text-xs text-[var(--color-muted)]">
+          These ages are read from your own projection rather than assumed.{" "}
+          <span className="font-semibold">Worth knowing:</span> the SA reaching the FRS does{" "}
+          <em>not</em> by itself push money into the OA before 55 — the SA keeps taking its mandatory
+          contributions past the FRS. What the FRS actually gates is the <em>routing</em> of the
+          MediSave overflow: once the MA is full at the BHS, its excess goes to the SA while the SA
+          still has room, and only lands in the OA once the SA is full too. From 55, the SA/RA slice
+          above the retirement sum spills to the OA as well.
         </p>
       </div>
 
@@ -1046,10 +1140,12 @@ export default function OaPage({
           <span className="font-semibold">How this is calculated.</span>{" "}
           From your start age the OA splits in two: the amount you keep earns 2.5% plus the extra
           interest (+1% on its first $20k below 55, +2% from 55) and receives your salary + employer
-          OA contributions <em>and</em> any overflow — once MediSave fills to the BHS its excess
-          cascades to the SA, then to the OA, carrying its 4% interest with it. Everything above the
-          amount you keep compounds at your assumed return. The &ldquo;no investing&rdquo; line is
-          the identical projection with no split, so the gap is purely the investing.{" "}
+          OA contributions, <em>any overflow</em> — once MediSave fills to the BHS its excess
+          cascades to the SA, then to the OA, carrying its 4% interest with it — <em>and</em> your
+          voluntary OA top-up from the calculator above, so topped-up dollars are investable like any
+          other OA dollar. Everything above the amount you keep compounds at your assumed return. The
+          &ldquo;no investing&rdquo; line is the identical projection with no split, so the gap is
+          purely the investing.{" "}
           <span className="font-semibold">Money is conserved</span> — CPFIS-OA can only be funded
           from the OA, so the monthly amount is <em>rerouted</em> from your OA inflow (capped at it),
           never added as new cash.{" "}
