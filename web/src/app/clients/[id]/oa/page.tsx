@@ -10,7 +10,10 @@ import { NumberInput } from "@/components/number-input";
 import { PageHeading, OrdinaryIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { getWhatIf, setWhatIf } from "@/lib/whatif";
+import {
+  getWhatIf, setWhatIf, investibleOa, oaInvestValue, oaInvestDelta,
+  CPFIS_OA_FLOOR, CPFIS_STOCK_LIMIT, CPFIS_GOLD_LIMIT,
+} from "@/lib/whatif";
 
 // OA base interest floor.
 const OA_RATE = 0.025;
@@ -52,6 +55,20 @@ export default function OaPage({
     setWhatIf(Number(id), { oa: { topup, startAge: topupAge } });
   }, [id, topup, topupAge]);
 
+  // CPFIS-OA investment what-if (lump above the $20k floor + monthly investing)
+  const savedInv = useMemo(() => getWhatIf(Number(id)).oaInvest, [id]);
+  const [invAmt, setInvAmt] = useState<number>(() => savedInv?.investible ?? 0);
+  const [invAge, setInvAge] = useState<number>(() => savedInv?.startAge ?? 0);
+  const [invRate, setInvRate] = useState<number>(() => savedInv?.ratePct ?? 5);
+  const [invMonthly, setInvMonthly] = useState<number>(() => savedInv?.monthly ?? 0);
+
+  // Persist so the Overview's What-If Scenario reflects this calculator too.
+  useEffect(() => {
+    setWhatIf(Number(id), {
+      oaInvest: { investible: invAmt, startAge: invAge, ratePct: invRate, monthly: invMonthly },
+    });
+  }, [id, invAmt, invAge, invRate, invMonthly]);
+
   // Monthly housing mortgage — paid from OA every month from `mortgageAge`,
   // reducing the OA balance/interest shown across the page.
   const [mortgageMth, setMortgageMth] = useState<number>(0);
@@ -76,9 +93,12 @@ export default function OaPage({
         // Prefill the monthly mortgage from the client's profile.
         setMortgageMth(Math.max(0, Math.round(m.housing_data?.monthly_mortgage ?? 0)));
         if (r.result.years.length > 0) {
-          setAge(r.result.years[0].age);
-          setTopupAge(r.result.years[0].age);
-          setMortgageAge(r.result.years[0].age);
+          const first = r.result.years[0].age;
+          setAge(first);
+          setTopupAge(first);
+          setMortgageAge(first);
+          // Only seed the investment age if the user hasn't already set one.
+          setInvAge((prev) => (prev > 0 ? prev : first));
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -176,6 +196,35 @@ export default function OaPage({
     });
     setWiData(data);
   }
+
+  // ── CPFIS-OA investment what-if (derived) ──────────────────────────────────
+  // Rule: only OA above the $20k floor may be invested. Cap the input against
+  // the OA balance at the chosen start age (projected), not today's, since the
+  // user picks a future age to start investing.
+  const oaAtInvAge =
+    mortgageByAge.get(invAge)?.closing ??
+    years.find((y) => y.age === invAge)?.closing.OA ??
+    member.balances.OA;
+  const invMax = investibleOa(oaAtInvAge);
+  const invMaxStock = invMax * CPFIS_STOCK_LIMIT;
+  const invMaxGold = invMax * CPFIS_GOLD_LIMIT;
+  const invParams = { investible: invAmt, startAge: invAge, ratePct: invRate, monthly: invMonthly };
+  // Gross pot at the selected year, and what it's worth vs leaving the money in OA.
+  const invValue = oaInvestValue(invParams, age);
+  const invDelta = oaInvestDelta(invParams, age);
+  const invWarnings: string[] = [];
+  if (invAmt > invMax)
+    invWarnings.push(
+      `You can only invest OA above ${sgd(CPFIS_OA_FLOOR)} — at age ${invAge} that leaves ${sgd(invMax)} investible.`,
+    );
+  if (invAmt > invMaxStock)
+    invWarnings.push(
+      `Stocks are capped at 35% of investible savings (${sgd(invMaxStock)}) and gold at 10% (${sgd(invMaxGold)}). Amounts above that must go into other CPFIS-included products.`,
+    );
+  if (invRate < 2.5 && (invAmt > 0 || invMonthly > 0))
+    invWarnings.push(
+      `A ${invRate}% return is below the 2.5% OA floor — investing would leave you worse off than leaving the money in OA.`,
+    );
 
   const cardClass =
     "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]";
@@ -471,6 +520,148 @@ export default function OaPage({
         <p className="mt-3 text-xs text-[var(--color-muted)]">
           Estimate: starting at the chosen age, each year&apos;s voluntary OA top-up is compounded at
           the 2.5% OA floor rate and added to the projected balance.
+        </p>
+      </div>
+
+      {/* 8b. Top-up what-if calculator (CPF-OA Investment) */}
+      <div className={`${cardClass} mb-4`}>
+        <h3 className={`${labelClass} mb-1`}>Top-up what-if calculator (CPF-OA Investment)</h3>
+        <p className="mb-4 text-sm text-[var(--color-muted)]">
+          Invest OA savings through CPFIS-OA at an assumed return instead of leaving them at the
+          2.5% floor. Figures at age {age} (use the year scrubber above to change).
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label htmlFor="oa-inv-amt" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Investible OA Amount (S$)
+            </label>
+            <NumberInput
+              id="oa-inv-amt"
+              min={0}
+              step={1000}
+              value={invAmt}
+              placeholder="0"
+              onChange={setInvAmt}
+              className={inputClass}
+              aria-label="Investible OA amount in Singapore dollars"
+            />
+            <p className="mt-1 text-xs text-[var(--color-muted)]">Max {sgd(invMax)} at age {invAge}</p>
+          </div>
+          <div>
+            <label htmlFor="oa-inv-age" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Specific Age (start investing)
+            </label>
+            <NumberInput
+              id="oa-inv-age"
+              min={0}
+              max={120}
+              step={1}
+              value={invAge}
+              onChange={setInvAge}
+              className={inputClass}
+              aria-label="Age at which investing begins"
+            />
+          </div>
+          <div>
+            <label htmlFor="oa-inv-rate" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Rate of Return (per year) %
+            </label>
+            <NumberInput
+              id="oa-inv-rate"
+              min={0}
+              max={30}
+              step={0.5}
+              value={invRate}
+              onChange={setInvRate}
+              className={inputClass}
+              aria-label="Assumed annual rate of return, percent"
+            />
+            <p className="mt-1 text-xs text-[var(--color-muted)]">OA floor is 2.5%</p>
+          </div>
+          <div>
+            <label htmlFor="oa-inv-mth" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Monthly Contribution (S$)
+            </label>
+            <NumberInput
+              id="oa-inv-mth"
+              min={0}
+              step={100}
+              value={invMonthly}
+              placeholder="0"
+              onChange={setInvMonthly}
+              className={inputClass}
+              aria-label="Monthly amount invested in Singapore dollars"
+            />
+          </div>
+        </div>
+
+        {/* CPFIS hard limits */}
+        <div className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Investible savings (OA above $20k)</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(invMax)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Stock limit (35%)</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(invMaxStock)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">Gold limit (10%)</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{sgd(invMaxGold)}</p>
+          </div>
+        </div>
+
+        {invWarnings.length > 0 && (
+          <ul role="alert" className="mt-3 space-y-1">
+            {invWarnings.map((w) => (
+              <li key={w} className="rounded-xl bg-[var(--color-warning)]/10 px-3 py-2 text-xs text-[var(--color-warning)]">
+                ⚠ {w}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Result */}
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-4 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-2"
+        >
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">
+              Total Growth of CPF-OA (Investment) — age {age}
+            </p>
+            <p className="mt-0.5 text-2xl font-bold tabular-nums text-[var(--color-primary)]">
+              {sgd(invValue)}
+            </p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Lump + monthly contributions, compounded at {invRate}%/yr
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[var(--color-muted)]">vs leaving it in OA (2.5%)</p>
+            <p
+              className={`mt-0.5 text-2xl font-bold tabular-nums ${
+                invDelta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-[var(--color-error)]"
+              }`}
+            >
+              {invDelta >= 0 ? "+" : ""}{sgd(invDelta)}
+            </p>
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              This is the figure carried into the Overview What-If Scenario.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs text-[var(--color-muted)]">
+          <span className="font-semibold">How this is calculated.</span>{" "}
+          The lump grows at your assumed return: <em>Investible x (1 + r)^years</em>. Monthly
+          contributions are added as a yearly annuity at the same rate. The green/red figure is the{" "}
+          <em>uplift</em> — the lump is already earning 2.5% in the baseline projection, so only the
+          difference <em>(1 + r)^years − (1.025)^years</em> is new money; counting the whole pot on
+          top of the baseline would double-count the principal. A return under 2.5% correctly shows a
+          loss against the OA floor.
         </p>
       </div>
 

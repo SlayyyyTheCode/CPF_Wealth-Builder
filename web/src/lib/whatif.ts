@@ -11,7 +11,32 @@ export interface OaParams { topup: number; startAge: number }
 export interface MaParams { topup: number; startAge: number }
 export interface SaParams { topup: number; transfer: number; startAge: number; transferStartAge: number; years: number }
 
-export interface WhatIfParams { oa?: OaParams; sa?: SaParams; ma?: MaParams }
+/** CPFIS-OA investment what-if (OA tab). `investible` is the lump moved out of
+ *  OA into investments at `startAge`; `monthly` is fresh money invested every
+ *  month from then on; `ratePct` is the assumed annual return. */
+export interface OaInvestParams {
+  investible: number;
+  startAge: number;
+  ratePct: number;
+  monthly: number;
+}
+
+export interface WhatIfParams {
+  oa?: OaParams;
+  sa?: SaParams;
+  ma?: MaParams;
+  oaInvest?: OaInvestParams;
+}
+
+// ── CPFIS hard rules (cpf.gov.sg) ────────────────────────────────────────────
+/** You may only invest OA savings ABOVE this floor. */
+export const CPFIS_OA_FLOOR = 20_000;
+/** Sub-limits, as a share of investible savings. */
+export const CPFIS_STOCK_LIMIT = 0.35;
+export const CPFIS_GOLD_LIMIT = 0.10;
+
+/** Investible savings = OA balance above the $20k floor. */
+export const investibleOa = (oa: number) => Math.max(oa - CPFIS_OA_FLOOR, 0);
 
 const KEY = (id: number) => `cpf_whatif_${id}`;
 
@@ -34,6 +59,42 @@ function annuityExtra(amt: number, startAge: number, age: number, rate: number):
 }
 
 const retClosing = (y: YearRow) => (y.closing.RA > 0 ? y.closing.RA : y.closing.SA);
+
+/** Gross value of the CPFIS-OA investment pot at `age`: the lump compounded at
+ *  the assumed return, plus the future value of the monthly contributions.
+ *  This is what the OA tab's calculator displays. */
+export function oaInvestValue(p: OaInvestParams, age: number): number {
+  const r = p.ratePct / 100;
+  const k = age - p.startAge;
+  if (k < 0) return 0;
+  const lump = p.investible > 0 ? p.investible * (1 + r) ** k : 0;
+  const contrib = annuityExtra(p.monthly * 12, p.startAge, age, r);
+  return lump + contrib;
+}
+
+/** Effect of the CPFIS-OA investment on the COMBINED total at `age`.
+ *
+ *  Not the same as the gross pot value above. The invested lump is OA money
+ *  that the baseline projection is already growing at the 2.5% OA floor, so
+ *  crediting the whole grown pot would count that principal twice (the same
+ *  double-count the OA→SA transfer had). Only the *uplift* over what those
+ *  dollars would have earned sitting in OA is new:
+ *
+ *      lump x [ (1+r)^k  -  (1+2.5%)^k ]
+ *
+ *  A return below 2.5% therefore correctly shows up as a NEGATIVE delta —
+ *  investing can lose against the risk-free floor, and the app should say so.
+ *  Monthly contributions are fresh money not present in the baseline, so their
+ *  full future value is additive. */
+export function oaInvestDelta(p: OaInvestParams, age: number): number {
+  const r = p.ratePct / 100;
+  const k = age - p.startAge;
+  if (k < 0) return 0;
+  const lumpUplift =
+    p.investible > 0 ? p.investible * ((1 + r) ** k - (1 + OA_RATE) ** k) : 0;
+  const contrib = annuityExtra(p.monthly * 12, p.startAge, age, r);
+  return lumpUplift + contrib;
+}
 
 // MA can't fund a CPF LIFE payout (or general spending) — kept out of the
 // "payout-eligible" base/scen total and reported separately.
@@ -107,10 +168,11 @@ export function buildScenario(
     const baseMa = isNow ? current!.MA : y.closing.MA;
     const oaE = p.oa ? annuityExtra(p.oa.topup, p.oa.startAge, y.age, OA_RATE) : 0;
     const maE = p.ma ? annuityExtra(p.ma.topup, p.ma.startAge, y.age, MA_RATE) : 0;
+    const invE = p.oaInvest ? oaInvestDelta(p.oaInvest, y.age) : 0;
     const saE = saExtra.get(y.age) ?? 0;
     const outE = oaOut.get(y.age) ?? 0;
     // OA can't go below zero — a transfer bigger than the OA just drains it.
-    const scenOa = Math.max(baseOa + oaE - outE, 0);
+    const scenOa = Math.max(baseOa + oaE + invE - outE, 0);
     const scenRa = baseRa + saE;
     const scenMa = baseMa + maE;
     return {

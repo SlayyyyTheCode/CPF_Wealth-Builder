@@ -131,9 +131,10 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
       <section aria-label="What-if scenario" className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-semibold">What-If Scenario</h3>
         <p className="mt-1 text-xs text-[var(--color-muted)]">
-          Combines the Top-up what-if calculators from OA and SA. Accounts you
-          haven&apos;t set fall back to their projected balance. Drag to an age to
-          compare the total.{" "}
+          Combines the Top-up what-if calculators from OA and SA — including the
+          OA tab&apos;s CPF-OA Investment calculator. Accounts you haven&apos;t
+          set fall back to their projected balance. Drag to an age to compare the
+          total.{" "}
           <span className="font-semibold text-[var(--color-fg)]">
             These figures exclude the MediSave (MA) account
           </span>{" "}
