@@ -60,6 +60,8 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
         ovf_year = {
             "ma_to_sa": ZERO, "ma_to_oa": ZERO, "ma_to_ra": ZERO,
             "sa_to_oa": ZERO, "sa_to_ra": ZERO,
+            # Age-55 RA formation: OA drawn on to reach the retirement sum.
+            "oa_to_ra": ZERO,
         }
 
         for month in range(1, 13):
@@ -71,6 +73,14 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
                 state, detail = form_ra(state, target)
                 events.append(Event("RA_FORMED", year, month, detail))
                 events.append(Event("SA_CLOSED", year, month, {"sa_to_oa": detail["sa_to_oa"]}))
+                # These two move real money in/out of the OA, so they belong in
+                # overflow_out and not only in the event log — a consumer
+                # reconstructing the OA balance (e.g. the OA tab's CPFIS
+                # comparison) is otherwise blind to them. The SA closes into the
+                # OA once it has filled the RA to the retirement sum; if the SA
+                # could not reach that sum, the OA is drawn on to top it up.
+                ovf_year["sa_to_oa"] += detail["sa_to_oa"]
+                ovf_year["oa_to_ra"] += detail["from_oa"]
 
             # Capture RA at the payout-age birthday (start of that month)
             if year == payout_year and month == inp.dob.month:

@@ -23,7 +23,11 @@ export interface YearRow {
   total_contributions?: number; interest_base?: number; interest_extra?: number;
   interest_by_account?: { OA: number; SA: number; MA: number; RA: number };
   contribution_by_account?: { OA: number; SA: number; MA: number; RA: number };
-  overflow_out?: { ma_to_sa: number; ma_to_oa: number; ma_to_ra: number; sa_to_oa: number; sa_to_ra: number };
+  overflow_out?: {
+    ma_to_sa: number; ma_to_oa: number; ma_to_ra: number;
+    sa_to_oa: number; sa_to_ra: number;
+    oa_to_ra?: number;  // age-55 RA formation drawing on the OA
+  };
 }
 export interface CpfLife {
   eligible: boolean; monthly_payout: number; annual_payout: number;

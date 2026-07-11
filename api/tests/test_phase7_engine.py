@@ -43,7 +43,10 @@ def resolver(_year):
 
 
 ACCOUNTS = ("OA", "SA", "MA", "RA")
-OVERFLOW_KEYS = {"ma_to_sa", "ma_to_oa", "ma_to_ra", "sa_to_oa", "sa_to_ra"}
+OVERFLOW_KEYS = {
+    "ma_to_sa", "ma_to_oa", "ma_to_ra", "sa_to_oa", "sa_to_ra",
+    "oa_to_ra",  # age-55 RA formation drawing on the OA
+}
 
 
 def test_each_year_has_interest_by_account_with_all_four_keys():
@@ -66,8 +69,11 @@ def test_each_year_has_interest_by_account_with_all_four_keys():
             )
 
 
-def test_each_year_has_overflow_out_with_all_five_keys():
-    """Every serialized YearResult must have overflow_out with the 5 routing keys."""
+def test_each_year_has_overflow_out_with_all_routing_keys():
+    """Every serialized YearResult must have overflow_out with all routing keys.
+
+    oa_to_ra was added so consumers can see the age-55 OA -> RA sweep, which was
+    previously only in the event log."""
     inp = SimulationInput(
         opening=AccountState(),
         dob=date(1986, 1, 1),

@@ -73,12 +73,25 @@ function oaYearInterest(bal: number, age: number): number {
   return bal * OA_RATE + extraRate * Math.min(Math.max(bal, 0), OA_EXTRA_CAP);
 }
 
+/** RA interest for one year: the 4% floor plus the 55+ extra-interest tiers
+ *  (+2% on the first $30k, +1% on the next $30k). */
+function raYearInterest(bal: number): number {
+  const b = Math.max(bal, 0);
+  const tier1 = Math.min(b, 30_000);
+  const tier2 = Math.min(Math.max(b - 30_000, 0), 30_000);
+  return b * SA_RATE + 0.02 * tier1 + 0.01 * tier2;
+}
+
 export interface OaSplitRow {
   age: number;
   oaOnly: number;    // everything stays in OA
   retained: number;  // the kept-in-OA bucket
   invested: number;  // the CPFIS-OA bucket
   combined: number;  // retained + invested
+  raOnly: number;    // RA built by the age-55 sweep, no-investing line
+  raSplit: number;   // RA built by the age-55 sweep, investing line
+  totalOnly: number; // oaOnly + raOnly       — nothing hidden
+  totalSplit: number; // combined + raSplit   — nothing hidden
 }
 
 /** Side-by-side projection: leaving everything in the OA vs. keeping
@@ -109,9 +122,20 @@ export function simulateOaSplit(years: YearRow[], p: OaInvestParams): OaSplitRow
   let oaOnly = oaStart;
   let retained = Math.min(Math.max(p.keepInOa, 0), oaStart);
   let invested = Math.max(oaStart - Math.max(p.keepInOa, 0), 0);
+  // RA balances built by the age-55 sweep, tracked per line so that money
+  // leaving the OA is shown moving into the RA rather than disappearing.
+  let raOnly = 0;
+  let raSplit = 0;
 
   const rows: OaSplitRow[] = [
-    { age: years[startIdx].age, oaOnly, retained, invested, combined: retained + invested },
+    {
+      age: years[startIdx].age,
+      oaOnly, retained, invested,
+      raOnly, raSplit,
+      combined: retained + invested,
+      totalOnly: oaOnly,
+      totalSplit: retained + invested,
+    },
   ];
 
   for (let i = startIdx + 1; i < years.length; i++) {
@@ -126,6 +150,9 @@ export function simulateOaSplit(years: YearRow[], p: OaInvestParams): OaSplitRow
     // overflow already carries the MA/SA 4% interest, since a full MA's
     // year-end interest overflows through the same path.
     const wageIn = y.contribution_by_account?.OA ?? 0;
+    // sa_to_oa also carries the age-55 SA closure: once the SA has filled the
+    // RA to the retirement sum, whatever is left over lands in the OA and keeps
+    // earning the OA rate + extra interest.
     const overflowIn =
       (y.overflow_out?.ma_to_oa ?? 0) + (y.overflow_out?.sa_to_oa ?? 0);
     const contrib = wageIn + overflowIn;
@@ -137,7 +164,39 @@ export function simulateOaSplit(years: YearRow[], p: OaInvestParams): OaSplitRow
     retained = retained + oaYearInterest(retained, y.age) + toOa;
     invested = invested * (1 + r) + toInvest;
 
-    rows.push({ age: y.age, oaOnly, retained, invested, combined: retained + invested });
+    // Age 55: the RA is filled from the SA first, and the OA is drawn on only
+    // if the SA could not reach the retirement sum. That money is NOT lost —
+    // it sits in the RA earning 4% + extra interest — but it does leave the OA,
+    // so an OA chart that ignored it would overstate the balance from 55 on.
+    //
+    // The sweep takes CASH. CPFIS-OA holdings are not liquidated at 55, so the
+    // invested bucket is untouched and only the OA cash can be drawn on (capped
+    // at what is actually there). That is a real, material edge for investing,
+    // and the chart now shows it instead of hiding it.
+    const sweep = y.overflow_out?.oa_to_ra ?? 0;
+    if (sweep > 0) {
+      const fromOaOnly = Math.min(sweep, oaOnly);
+      oaOnly -= fromOaOnly;
+      raOnly += fromOaOnly;
+
+      const fromRetained = Math.min(sweep, retained);
+      retained -= fromRetained;
+      raSplit += fromRetained;
+    }
+    // The RA keeps compounding at 4% + extra interest (from 55: +2% on the
+    // first $30k, +1% on the next $30k) — counted so the two totals stay
+    // comparable and no money appears to vanish at 55.
+    raOnly += raYearInterest(raOnly);
+    raSplit += raYearInterest(raSplit);
+
+    rows.push({
+      age: y.age,
+      oaOnly, retained, invested,
+      raOnly, raSplit,
+      combined: retained + invested,
+      totalOnly: oaOnly + raOnly,
+      totalSplit: retained + invested + raSplit,
+    });
   }
   return rows;
 }
@@ -184,10 +243,15 @@ export function buildScenario(
   // adding the whole pot on top would double-count it — the same bug the
   // OA->SA transfer had. Using the gap also cancels any drift between this
   // loop's interest model and the engine's, since both lines share the loop.
+  // Compare TOTALS (OA + RA + invested), not the OA alone. From 55 the sweep
+  // moves OA cash into the RA; measuring only the OA would read that as a loss
+  // when the money is simply sitting in another account. The two lines sweep
+  // different amounts (CPFIS holdings are not liquidated, so the investing line
+  // keeps more outside the RA), and the total-wealth gap is what Overview wants.
   const invGap = new Map<number, number>();
   if (p.oaInvest) {
     for (const row of simulateOaSplit(years, p.oaInvest)) {
-      invGap.set(row.age, row.combined - row.oaOnly);
+      invGap.set(row.age, row.totalSplit - row.totalOnly);
     }
   }
 

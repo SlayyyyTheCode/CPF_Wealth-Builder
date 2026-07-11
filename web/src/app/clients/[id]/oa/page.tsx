@@ -206,7 +206,10 @@ export default function OaPage({
   const oaAtInvAge = years.find((y) => y.age >= invAge)?.closing.OA ?? member.balances.OA;
   const investedAtStart = Math.max(oaAtInvAge - Math.max(invKeep, 0), 0);
   const splitSel = splitRows.find((r) => r.age === age) ?? splitRows[splitRows.length - 1] ?? null;
-  const splitGap = splitSel ? splitSel.combined - splitSel.oaOnly : 0;
+  // Compare TOTAL wealth (OA + RA + invested). From 55 the RA sweep moves OA
+  // cash into the RA — comparing the OA alone would read that as a loss.
+  const splitGap = splitSel ? splitSel.totalSplit - splitSel.totalOnly : 0;
+  const swept = splitSel ? splitSel.raOnly > 0 || splitSel.raSplit > 0 : false;
 
   // Real-world CPFIS guidance (informational, not enforced).
   const cpfisInvestible = Math.max(oaAtInvAge - CPFIS_OA_FLOOR, 0);
@@ -622,17 +625,21 @@ export default function OaPage({
             className="mt-4 grid gap-x-6 gap-y-4 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
           >
             <div>
-              <p className="text-xs text-[var(--color-muted)]">OA only — no investing (age {age})</p>
-              <p className="mt-0.5 text-2xl font-bold tabular-nums">{sgd(splitSel.oaOnly)}</p>
-              <p className="mt-1 text-xs text-[var(--color-muted)]">2.5% + extra interest</p>
+              <p className="text-xs text-[var(--color-muted)]">No investing — total (age {age})</p>
+              <p className="mt-0.5 text-2xl font-bold tabular-nums">{sgd(splitSel.totalOnly)}</p>
+              <p className="mt-1 text-xs text-[var(--color-muted)]">
+                OA {sgd(splitSel.oaOnly)}
+                {swept && <> + RA {sgd(splitSel.raOnly)}</>}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-[var(--color-muted)]">Keep in OA + CPFIS-OA (age {age})</p>
+              <p className="text-xs text-[var(--color-muted)]">Keep in OA + CPFIS-OA — total (age {age})</p>
               <p className="mt-0.5 text-2xl font-bold tabular-nums text-[var(--color-primary)]">
-                {sgd(splitSel.combined)}
+                {sgd(splitSel.totalSplit)}
               </p>
               <p className="mt-1 text-xs text-[var(--color-muted)]">
                 OA {sgd(splitSel.retained)} + invested {sgd(splitSel.invested)}
+                {swept && <> + RA {sgd(splitSel.raSplit)}</>}
               </p>
             </div>
             <div>
@@ -670,37 +677,37 @@ export default function OaPage({
                 <Tooltip
                   formatter={(v, name) => [
                     sgd(typeof v === "number" ? v : null),
-                    name === "oaOnly"
-                      ? "OA only (no investing)"
-                      : name === "combined"
-                        ? "Keep in OA + CPFIS-OA"
-                        : name === "invested"
-                          ? "…of which invested"
-                          : String(name),
+                    name === "totalOnly"
+                      ? "No investing (OA + RA)"
+                      : name === "totalSplit"
+                        ? "Keep in OA + CPFIS-OA (OA + RA + invested)"
+                        : "…of which invested",
                   ]}
                   labelFormatter={(a) => `Age ${a}`}
                   contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
                 />
                 <Legend
                   formatter={(v) =>
-                    v === "oaOnly"
-                      ? "OA only (no investing)"
-                      : v === "combined"
+                    v === "totalOnly"
+                      ? "No investing (OA + RA)"
+                      : v === "totalSplit"
                         ? "Keep in OA + CPFIS-OA"
                         : "…of which invested"
                   }
                   wrapperStyle={{ fontSize: "12px" }}
                 />
-                {/* At 55 the OA is swept into the RA — not modelled in this side-by-side. */}
+                {/* At 55 the RA forms: the SA fills it to the retirement sum and
+                    the OA is drawn on only if the SA falls short. Totals include
+                    the RA, so nothing appears to vanish here. */}
                 <ReferenceLine
                   x={55}
                   stroke="var(--color-muted)"
                   strokeDasharray="4 4"
-                  label={{ value: "55", position: "top", fontSize: 10, fill: "var(--color-muted)" }}
+                  label={{ value: "55 · RA forms", position: "top", fontSize: 10, fill: "var(--color-muted)" }}
                 />
-                <Line isAnimationActive={false} type="monotone" dataKey="oaOnly" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="totalOnly" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
                 <Line isAnimationActive={false} type="monotone" dataKey="invested" stroke="var(--chart-4)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
-                <Line isAnimationActive={false} type="monotone" dataKey="combined" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+                <Line isAnimationActive={false} type="monotone" dataKey="totalSplit" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -710,16 +717,21 @@ export default function OaPage({
           <span className="font-semibold">How this is calculated.</span>{" "}
           From your start age the OA splits in two: the amount you keep earns 2.5% plus the extra
           interest (+1% on its first $20k below 55, +2% from 55) and receives your salary + employer
-          OA contributions; everything above it compounds at your assumed return. The
-          &ldquo;OA only&rdquo; line is the identical projection with no split, so the gap is purely
-          the investing.{" "}
+          OA contributions <em>and</em> any overflow — once MediSave fills to the BHS its excess
+          cascades to the SA, then to the OA, carrying its 4% interest with it. Everything above the
+          amount you keep compounds at your assumed return. The &ldquo;no investing&rdquo; line is
+          the identical projection with no split, so the gap is purely the investing.{" "}
           <span className="font-semibold">Money is conserved</span> — CPFIS-OA can only be funded
           from the OA, so the monthly amount is <em>rerouted</em> from your OA inflow (capped at it),
           never added as new cash.{" "}
-          <span className="font-semibold">Not modelled:</span> the housing mortgage above, and the
-          age-55 OA&nbsp;→&nbsp;RA sweep. Both would hit the two lines equally, so the difference
-          stays valid; only the absolute levels past 55 run high. The real $20,000 CPFIS floor is not
-          enforced here — this is a hypothetical scenario.
+          <span className="font-semibold">At 55</span> the RA forms: the SA fills it up to the
+          retirement sum and any SA left over spills into the OA; the OA is drawn on only if the SA
+          falls short. Both lines show <em>totals including the RA</em>, so nothing vanishes at 55 —
+          and because CPFIS-OA holdings are <em>not</em> liquidated at 55, invested money stays
+          outside the RA. The RA then compounds at 4% + extra interest (+2% on its first $30k, +1% on
+          the next $30k).{" "}
+          <span className="font-semibold">Not modelled:</span> the housing mortgage above. The real
+          $20,000 CPFIS floor is not enforced here — this is a hypothetical scenario.
         </p>
       </div>
 
