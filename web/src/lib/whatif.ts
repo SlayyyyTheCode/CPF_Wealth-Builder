@@ -11,11 +11,14 @@ export interface OaParams { topup: number; startAge: number }
 export interface MaParams { topup: number; startAge: number }
 export interface SaParams { topup: number; transfer: number; startAge: number; transferStartAge: number; years: number }
 
-/** CPFIS-OA investment what-if (OA tab). `investible` is the lump moved out of
- *  OA into investments at `startAge`; `monthly` is fresh money invested every
- *  month from then on; `ratePct` is the assumed annual return. */
+/** CPFIS-OA investment what-if (OA tab).
+ *  At `startAge` the OA is split: `keepInOa` stays in the OA earning the 2.5%
+ *  floor + extra interest, and everything ABOVE it is invested at `ratePct`.
+ *  `monthly` is the amount rerouted from the monthly OA contribution into the
+ *  investment (CPFIS-OA can only be funded from OA, so this is not new money —
+ *  it is subtracted from what reaches the OA bucket). */
 export interface OaInvestParams {
-  investible: number;
+  keepInOa: number;
   startAge: number;
   ratePct: number;
   monthly: number;
@@ -60,40 +63,71 @@ function annuityExtra(amt: number, startAge: number, age: number, rate: number):
 
 const retClosing = (y: YearRow) => (y.closing.RA > 0 ? y.closing.RA : y.closing.SA);
 
-/** Gross value of the CPFIS-OA investment pot at `age`: the lump compounded at
- *  the assumed return, plus the future value of the monthly contributions.
- *  This is what the OA tab's calculator displays. */
-export function oaInvestValue(p: OaInvestParams, age: number): number {
-  const r = p.ratePct / 100;
-  const k = age - p.startAge;
-  if (k < 0) return 0;
-  const lump = p.investible > 0 ? p.investible * (1 + r) ** k : 0;
-  const contrib = annuityExtra(p.monthly * 12, p.startAge, age, r);
-  return lump + contrib;
+/** One year of OA interest: the 2.5% floor plus the extra interest.
+ *  Extra interest: OA is counted FIRST toward the combined-balance tiers and is
+ *  capped at $20k, so its whole slice always sits in the top tier — +1% below
+ *  55, +2% from 55 (where the top tier is the first $30k of combined). */
+export const OA_EXTRA_CAP = 20_000;
+function oaYearInterest(bal: number, age: number): number {
+  const extraRate = age >= 55 ? 0.02 : 0.01;
+  return bal * OA_RATE + extraRate * Math.min(Math.max(bal, 0), OA_EXTRA_CAP);
 }
 
-/** Effect of the CPFIS-OA investment on the COMBINED total at `age`.
+export interface OaSplitRow {
+  age: number;
+  oaOnly: number;    // everything stays in OA
+  retained: number;  // the kept-in-OA bucket
+  invested: number;  // the CPFIS-OA bucket
+  combined: number;  // retained + invested
+}
+
+/** Side-by-side projection: leaving everything in the OA vs. keeping
+ *  `keepInOa` in the OA and investing the rest through CPFIS-OA.
  *
- *  Not the same as the gross pot value above. The invested lump is OA money
- *  that the baseline projection is already growing at the 2.5% OA floor, so
- *  crediting the whole grown pot would count that principal twice (the same
- *  double-count the OA→SA transfer had). Only the *uplift* over what those
- *  dollars would have earned sitting in OA is new:
+ *  BOTH lines run through this same loop, seeded from the same OA balance at
+ *  `startAge` and fed the same engine contributions. That is deliberate: if the
+ *  "OA only" line came from the engine projection while the invested line was
+ *  hand-rolled here, every difference between the two models would masquerade
+ *  as an investment gain. Same loop => the only difference between the lines is
+ *  the investing itself, and the gap is honest.
  *
- *      lump x [ (1+r)^k  -  (1+2.5%)^k ]
+ *  Money is conserved. CPFIS-OA can only be funded FROM the OA, so `monthly` is
+ *  the slice of each year's OA contribution REROUTED into the investment, not
+ *  fresh cash — it is subtracted from what reaches the OA bucket, and capped at
+ *  the actual contribution so it can never invent dollars.
  *
- *  A return below 2.5% therefore correctly shows up as a NEGATIVE delta —
- *  investing can lose against the risk-free floor, and the app should say so.
- *  Monthly contributions are fresh money not present in the baseline, so their
- *  full future value is additive. */
-export function oaInvestDelta(p: OaInvestParams, age: number): number {
+ *  Not modelled: the housing mortgage (an OA-tab-local input) and the age-55
+ *  OA->RA sweep. Both would hit the two lines identically, so the GAP between
+ *  them — which is what the comparison is for, and what Overview consumes —
+ *  stays correct; only the absolute levels past 55 run high. */
+export function simulateOaSplit(years: YearRow[], p: OaInvestParams): OaSplitRow[] {
   const r = p.ratePct / 100;
-  const k = age - p.startAge;
-  if (k < 0) return 0;
-  const lumpUplift =
-    p.investible > 0 ? p.investible * ((1 + r) ** k - (1 + OA_RATE) ** k) : 0;
-  const contrib = annuityExtra(p.monthly * 12, p.startAge, age, r);
-  return lumpUplift + contrib;
+  const startIdx = years.findIndex((y) => y.age >= p.startAge);
+  if (startIdx < 0) return [];
+
+  const oaStart = years[startIdx].closing.OA;
+  let oaOnly = oaStart;
+  let retained = Math.min(Math.max(p.keepInOa, 0), oaStart);
+  let invested = Math.max(oaStart - Math.max(p.keepInOa, 0), 0);
+
+  const rows: OaSplitRow[] = [
+    { age: years[startIdx].age, oaOnly, retained, invested, combined: retained + invested },
+  ];
+
+  for (let i = startIdx + 1; i < years.length; i++) {
+    const y = years[i];
+    const contrib = y.contribution_by_account?.OA ?? 0;
+    // Reroute at most what actually flows in — never create money.
+    const toInvest = Math.min(Math.max(p.monthly, 0) * 12, contrib);
+    const toOa = contrib - toInvest;
+
+    oaOnly = oaOnly + oaYearInterest(oaOnly, y.age) + contrib;
+    retained = retained + oaYearInterest(retained, y.age) + toOa;
+    invested = invested * (1 + r) + toInvest;
+
+    rows.push({ age: y.age, oaOnly, retained, invested, combined: retained + invested });
+  }
+  return rows;
 }
 
 // MA can't fund a CPF LIFE payout (or general spending) — kept out of the
@@ -132,6 +166,19 @@ export function buildScenario(
   // parallel "OA outflow" pot compounding at the OA rate — the balance (and
   // forgone 2.5% interest) the OA no longer has. Without this the combined
   // total double-counted each year's transfer as free new money.
+  // CPFIS-OA investing: take the GAP between the two lines of the same
+  // simulation (combined - oaOnly), never the invested pot on its own. The
+  // invested principal is OA money the baseline already grows at 2.5%, so
+  // adding the whole pot on top would double-count it — the same bug the
+  // OA->SA transfer had. Using the gap also cancels any drift between this
+  // loop's interest model and the engine's, since both lines share the loop.
+  const invGap = new Map<number, number>();
+  if (p.oaInvest) {
+    for (const row of simulateOaSplit(years, p.oaInvest)) {
+      invGap.set(row.age, row.combined - row.oaOnly);
+    }
+  }
+
   const saExtra = new Map<number, number>();
   const oaOut = new Map<number, number>();
   let extraPrev = 0;
@@ -168,7 +215,7 @@ export function buildScenario(
     const baseMa = isNow ? current!.MA : y.closing.MA;
     const oaE = p.oa ? annuityExtra(p.oa.topup, p.oa.startAge, y.age, OA_RATE) : 0;
     const maE = p.ma ? annuityExtra(p.ma.topup, p.ma.startAge, y.age, MA_RATE) : 0;
-    const invE = p.oaInvest ? oaInvestDelta(p.oaInvest, y.age) : 0;
+    const invE = invGap.get(y.age) ?? 0;
     const saE = saExtra.get(y.age) ?? 0;
     const outE = oaOut.get(y.age) ?? 0;
     // OA can't go below zero — a transfer bigger than the OA just drains it.
