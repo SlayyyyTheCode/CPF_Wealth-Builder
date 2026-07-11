@@ -22,7 +22,16 @@ export interface OaInvestParams {
   startAge: number;
   ratePct: number;
   monthly: number;
+  /** Display-only: deflates the OA-tab chart into today's dollars. Not applied
+   *  to the Overview scenario, which stays nominal like the rest of the app. */
+  inflationPct?: number;
 }
+
+/** Today's-dollars value of `nominal` received `years` from now. */
+export const realValue = (nominal: number, inflationPct: number, years: number) =>
+  years <= 0 || inflationPct <= 0
+    ? nominal
+    : nominal / (1 + inflationPct / 100) ** years;
 
 export interface WhatIfParams {
   oa?: OaParams;

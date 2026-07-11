@@ -11,7 +11,7 @@ import { PageHeading, OrdinaryIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
 import {
-  getWhatIf, setWhatIf, simulateOaSplit,
+  getWhatIf, setWhatIf, simulateOaSplit, realValue,
   CPFIS_OA_FLOOR, CPFIS_STOCK_LIMIT, CPFIS_GOLD_LIMIT,
 } from "@/lib/whatif";
 
@@ -61,13 +61,19 @@ export default function OaPage({
   const [invAge, setInvAge] = useState<number>(() => savedInv?.startAge ?? 0);
   const [invRate, setInvRate] = useState<number>(() => savedInv?.ratePct ?? 10);
   const [invMonthly, setInvMonthly] = useState<number>(() => savedInv?.monthly ?? 0);
+  const [invInflation, setInvInflation] = useState<number>(() => savedInv?.inflationPct ?? 3);
+  // The card's own timeline — independent of the page-wide "Select year" above.
+  const [invViewAge, setInvViewAge] = useState<number | null>(null);
 
   // Persist so the Overview's What-If Scenario reflects this calculator too.
   useEffect(() => {
     setWhatIf(Number(id), {
-      oaInvest: { keepInOa: invKeep, startAge: invAge, ratePct: invRate, monthly: invMonthly },
+      oaInvest: {
+        keepInOa: invKeep, startAge: invAge, ratePct: invRate,
+        monthly: invMonthly, inflationPct: invInflation,
+      },
     });
-  }, [id, invKeep, invAge, invRate, invMonthly]);
+  }, [id, invKeep, invAge, invRate, invMonthly, invInflation]);
 
   // Monthly housing mortgage — paid from OA every month from `mortgageAge`,
   // reducing the OA balance/interest shown across the page.
@@ -204,12 +210,31 @@ export default function OaPage({
   const invParams = { keepInOa: invKeep, startAge: invAge, ratePct: invRate, monthly: invMonthly };
   const splitRows = simulateOaSplit(years, invParams);
   const oaAtInvAge = years.find((y) => y.age >= invAge)?.closing.OA ?? member.balances.OA;
+
+  // "Initial investment" is the OTHER SIDE of the same split, not extra money:
+  // CPFIS-OA can only be funded from the OA, so investing more means keeping
+  // less. The two inputs are linked (edit either, the other follows) rather
+  // than independent, which would let the scenario invent dollars.
   const investedAtStart = Math.max(oaAtInvAge - Math.max(invKeep, 0), 0);
-  const splitSel = splitRows.find((r) => r.age === age) ?? splitRows[splitRows.length - 1] ?? null;
+  const setInitialInvestment = (v: number) =>
+    setInvKeep(Math.max(oaAtInvAge - Math.min(Math.max(v, 0), oaAtInvAge), 0));
+
+  // Card-local timeline (defaults to the last projected age).
+  const invAges = splitRows.map((r) => r.age);
+  const viewAge = invViewAge ?? invAges[invAges.length - 1] ?? age;
+  const splitSel = splitRows.find((r) => r.age === viewAge) ?? splitRows[splitRows.length - 1] ?? null;
   // Compare TOTAL wealth (OA + RA + invested). From 55 the RA sweep moves OA
   // cash into the RA — comparing the OA alone would read that as a loss.
   const splitGap = splitSel ? splitSel.totalSplit - splitSel.totalOnly : 0;
   const swept = splitSel ? splitSel.raOnly > 0 || splitSel.raSplit > 0 : false;
+
+  // Inflation-adjusted (today's dollars) view of the same two lines.
+  const realRows = splitRows.map((r) => ({
+    age: r.age,
+    realOnly: realValue(r.totalOnly, invInflation, r.age - invAge),
+    realSplit: realValue(r.totalSplit, invInflation, r.age - invAge),
+  }));
+  const realSel = realRows.find((r) => r.age === viewAge) ?? realRows[realRows.length - 1] ?? null;
 
   // Real-world CPFIS guidance (informational, not enforced).
   const cpfisInvestible = Math.max(oaAtInvAge - CPFIS_OA_FLOOR, 0);
@@ -534,7 +559,8 @@ export default function OaPage({
         <p className="mb-4 max-w-3xl text-sm text-[var(--color-muted)]">
           Keep an amount in the OA earning the 2.5% floor + extra interest, and invest everything
           above it through CPFIS-OA. Both lines below run through the <em>same</em> projection from
-          your start age, so the gap between them is the effect of investing — nothing else.
+          your start age, so the gap between them is the effect of investing — nothing else. Drag the
+          timeline to compare at any age.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -553,7 +579,25 @@ export default function OaPage({
               aria-label="Amount kept in the OA in Singapore dollars"
             />
             <p className="mt-1 text-xs text-[var(--color-muted)]">
-              Invests {sgd(investedAtStart)} at age {invAge}
+              OA at age {invAge}: {sgd(oaAtInvAge)}
+            </p>
+          </div>
+          <div>
+            <label htmlFor="oa-inv-initial" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Initial investment (S$)
+            </label>
+            <NumberInput
+              id="oa-inv-initial"
+              min={0}
+              step={1000}
+              value={Math.round(investedAtStart)}
+              placeholder="0"
+              onChange={setInitialInvestment}
+              className={inputClass}
+              aria-label="Initial amount invested through CPFIS-OA, in Singapore dollars"
+            />
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Funded from the OA — raising this lowers &ldquo;Keep in OA&rdquo;
             </p>
           </div>
           <div>
@@ -602,7 +646,25 @@ export default function OaPage({
               aria-label="Monthly amount routed from OA contributions into the investment"
             />
             <p className="mt-1 text-xs text-[var(--color-muted)]">
-              Rerouted from your OA inflow ({sgd(oaAnnualIn / 12)}/mth)
+              Rerouted from your OA inflow ({sgd(oaAnnualIn / 12)}/mth), added on top of the initial
+            </p>
+          </div>
+          <div>
+            <label htmlFor="oa-inv-infl" className="mb-1 block text-sm text-[var(--color-muted)]">
+              Inflation (per year) %
+            </label>
+            <NumberInput
+              id="oa-inv-infl"
+              min={0}
+              max={20}
+              step={0.5}
+              value={invInflation}
+              onChange={setInvInflation}
+              className={inputClass}
+              aria-label="Assumed annual inflation rate, percent"
+            />
+            <p className="mt-1 text-xs text-[var(--color-muted)]">
+              Used by the today&apos;s-dollars chart only
             </p>
           </div>
         </div>
@@ -617,6 +679,14 @@ export default function OaPage({
           </ul>
         )}
 
+        {/* Drag timeline — this card's own age selector */}
+        {invAges.length > 1 && (
+          <div className="mt-5">
+            <p className={`${labelClass} mb-2`}>Drag to compare at any age</p>
+            <YearScrubber ages={invAges} value={viewAge} onChange={setInvViewAge} />
+          </div>
+        )}
+
         {/* Side-by-side result at the selected year */}
         {splitSel && (
           <div
@@ -625,7 +695,7 @@ export default function OaPage({
             className="mt-4 grid gap-x-6 gap-y-4 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
           >
             <div>
-              <p className="text-xs text-[var(--color-muted)]">No investing — total (age {age})</p>
+              <p className="text-xs text-[var(--color-muted)]">No investing — total (age {viewAge})</p>
               <p className="mt-0.5 text-2xl font-bold tabular-nums">{sgd(splitSel.totalOnly)}</p>
               <p className="mt-1 text-xs text-[var(--color-muted)]">
                 OA {sgd(splitSel.oaOnly)}
@@ -633,7 +703,7 @@ export default function OaPage({
               </p>
             </div>
             <div>
-              <p className="text-xs text-[var(--color-muted)]">Keep in OA + CPFIS-OA — total (age {age})</p>
+              <p className="text-xs text-[var(--color-muted)]">Keep in OA + CPFIS-OA — total (age {viewAge})</p>
               <p className="mt-0.5 text-2xl font-bold tabular-nums text-[var(--color-primary)]">
                 {sgd(splitSel.totalSplit)}
               </p>
@@ -713,6 +783,101 @@ export default function OaPage({
           </div>
         )}
 
+        {/* Inflation-adjusted view — same two lines, in today's dollars */}
+        {realRows.length > 1 && invInflation > 0 && (
+          <>
+            <div className="mt-6 border-t border-[var(--color-border)] pt-4">
+              <h4 className="text-sm font-semibold">
+                In today&apos;s dollars — after {invInflation}% inflation
+              </h4>
+              <p className="mt-1 max-w-3xl text-sm text-[var(--color-muted)]">
+                The same two lines, deflated to what they would actually <em>buy</em> today. This is
+                the number that matters: the OA floor of 2.5% is close to typical inflation, so
+                uninvested savings barely hold their purchasing power.
+              </p>
+            </div>
+
+            {realSel && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mt-3 grid gap-x-6 gap-y-4 rounded-xl bg-[var(--color-surface-raised)] p-4 sm:grid-cols-3"
+              >
+                <div>
+                  <p className="text-xs text-[var(--color-muted)]">No investing — real (age {viewAge})</p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums">{sgd(realSel.realOnly)}</p>
+                  <p className="mt-1 text-xs text-[var(--color-muted)]">
+                    nominal {sgd(splitSel?.totalOnly ?? 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--color-muted)]">Keep in OA + CPFIS-OA — real (age {viewAge})</p>
+                  <p className="mt-0.5 text-xl font-bold tabular-nums text-[var(--color-primary)]">
+                    {sgd(realSel.realSplit)}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--color-muted)]">
+                    nominal {sgd(splitSel?.totalSplit ?? 0)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-[var(--color-muted)]">Real difference</p>
+                  <p
+                    className={`mt-0.5 text-xl font-bold tabular-nums ${
+                      realSel.realSplit - realSel.realOnly >= 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-[var(--color-error)]"
+                    }`}
+                  >
+                    {realSel.realSplit - realSel.realOnly >= 0 ? "+" : ""}
+                    {sgd(realSel.realSplit - realSel.realOnly)}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--color-muted)]">purchasing power gained</p>
+                </div>
+              </div>
+            )}
+
+            <div
+              role="img"
+              aria-label="Inflation-adjusted comparison in today's dollars: no investing versus keeping an amount in the OA and investing the rest"
+              className="mt-4 h-72"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={realRows} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="age" tick={{ fontSize: 11, fill: "var(--color-muted)" }} />
+                  <YAxis
+                    tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
+                    tick={{ fontSize: 11, fill: "var(--color-muted)" }}
+                    width={56}
+                  />
+                  <Tooltip
+                    formatter={(v, name) => [
+                      sgd(typeof v === "number" ? v : null),
+                      name === "realOnly" ? "No investing (real)" : "Keep in OA + CPFIS-OA (real)",
+                    ]}
+                    labelFormatter={(a) => `Age ${a} — today's dollars`}
+                    contentStyle={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: "8px", fontSize: "12px" }}
+                  />
+                  <Legend
+                    formatter={(v) =>
+                      v === "realOnly" ? "No investing (real)" : "Keep in OA + CPFIS-OA (real)"
+                    }
+                    wrapperStyle={{ fontSize: "12px" }}
+                  />
+                  <ReferenceLine
+                    x={55}
+                    stroke="var(--color-muted)"
+                    strokeDasharray="4 4"
+                    label={{ value: "55", position: "top", fontSize: 10, fill: "var(--color-muted)" }}
+                  />
+                  <Line isAnimationActive={false} type="monotone" dataKey="realOnly" stroke="var(--chart-grey)" strokeWidth={2} dot={false} />
+                  <Line isAnimationActive={false} type="monotone" dataKey="realSplit" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
+
         <p className="mt-3 max-w-3xl text-xs text-[var(--color-muted)]">
           <span className="font-semibold">How this is calculated.</span>{" "}
           From your start age the OA splits in two: the amount you keep earns 2.5% plus the extra
@@ -730,6 +895,12 @@ export default function OaPage({
           and because CPFIS-OA holdings are <em>not</em> liquidated at 55, invested money stays
           outside the RA. The RA then compounds at 4% + extra interest (+2% on its first $30k, +1% on
           the next $30k).{" "}
+          <span className="font-semibold">Initial investment</span> is the other side of the split,
+          not extra cash: CPFIS-OA can only be funded from the OA, so raising it lowers what you
+          keep. The monthly amount is then added on top of it each year.{" "}
+          <span className="font-semibold">Today&apos;s dollars</span> divides each year by
+          (1&nbsp;+&nbsp;inflation)<sup>years</sup> — it shows what the balance would actually buy,
+          which is the figure that matters when the OA floor (2.5%) sits close to inflation itself.{" "}
           <span className="font-semibold">Not modelled:</span> the housing mortgage above. The real
           $20,000 CPFIS floor is not enforced here — this is a hypothetical scenario.
         </p>
