@@ -31,5 +31,10 @@ SRS_2026 = {
     "taxable_fraction": 0.5,        # fraction of each SRS withdrawal that is taxable
     "premature_penalty": 0.05,      # 5% penalty on withdrawals before retirement age
     "withdrawal_years": 10,         # tax-free spread window from first withdrawal
-    "statutory_retirement_age": 63,
+    # Raised 63 -> 64 on 1 Jul 2026 (next step: 65 by 2030). NOTE: an SRS
+    # account locks its penalty-free withdrawal age to the statutory retirement
+    # age prevailing at the member's FIRST contribution, and keeps it for life —
+    # so accounts opened before 1 Jul 2026 stay at 63. This is the default for a
+    # NEW account; the UI lets the member override it.
+    "statutory_retirement_age": 64,
 }

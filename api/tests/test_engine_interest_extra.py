@@ -57,7 +57,11 @@ def test_apply_credit_under55_routes_oa_extra_to_sa():
     assert new.SA == Decimal("31700.00")                 # 30000 + 1200 + (200+300)
     assert new.MA == Decimal("15700.00")                 # 15000 + 600 + 100
     assert new.RA == Decimal("0.00")
-    assert ma_ovf == {"to_SA": Decimal("0"), "to_RA": Decimal("0"), "to_OA": Decimal("0")}
+    # No MA overflow, and (below 55) no SA-closure carry either.
+    assert ma_ovf == {
+        "to_SA": Decimal("0"), "to_RA": Decimal("0"), "to_OA": Decimal("0"),
+        "sa_close_to_RA": Decimal("0"), "sa_close_to_OA": Decimal("0"),
+    }
     assert base_total == Decimal("2300.00")
     assert extra_total == Decimal("600.00")
     assert ev.kind == "INTEREST_CREDITED"

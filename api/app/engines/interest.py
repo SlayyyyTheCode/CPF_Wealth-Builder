@@ -97,14 +97,30 @@ def apply_credit(state: AccountState, base_acc: dict, extra_acc: dict, age: int,
     else:
         extra_to_ra = extra["OA"] + extra["SA"] + extra["MA"] + extra["RA"]
         oa = state.OA + base["OA"]
-        sa = state.SA + base["SA"]
         ma = state.MA + base["MA"]
         ra = state.RA + base["RA"] + extra_to_ra
+        # The SA is CLOSED from 55 (form_ra). Interest it accrued in the months
+        # BEFORE the birthday is only credited now, and must not be posted back
+        # into the closed account — doing so left a phantom SA balance that then
+        # compounded at 4% for the rest of the projection. Carry it out below,
+        # routed exactly like the closure itself: RA up to the retirement sum,
+        # remainder to the OA.
+        sa_carry = state.SA + base["SA"]
+        sa = ZERO
 
     # MA interest can't stay once MA is at the BHS — cascade the excess.
     bhs = Decimal(str(policy["bhs"]))
     frs = Decimal(str(policy["frs"]))
-    ma_ovf = {"to_SA": ZERO, "to_RA": ZERO, "to_OA": ZERO}
+    ma_ovf = {"to_SA": ZERO, "to_RA": ZERO, "to_OA": ZERO,
+              # Interest the SA accrued before it closed at 55, re-routed out.
+              "sa_close_to_RA": ZERO, "sa_close_to_OA": ZERO}
+
+    if age >= 55 and sa_carry > ZERO:
+        to_ra = min(sa_carry, max(frs - ra, ZERO))
+        ra += to_ra
+        oa += sa_carry - to_ra
+        ma_ovf["sa_close_to_RA"] = to_ra
+        ma_ovf["sa_close_to_OA"] = sa_carry - to_ra
     if ma > bhs:
         excess = ma - bhs
         ma = bhs

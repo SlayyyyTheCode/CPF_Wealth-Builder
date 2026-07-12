@@ -44,7 +44,11 @@ export function SrsUserPanel({
 }) {
   const [age, setAge] = useState(35);
   const [ageTouched, setAgeTouched] = useState(false);
-  const [withdrawalAge, setWithdrawalAge] = useState(63);
+  // Statutory retirement age, which is what SRS locks the penalty-free
+  // withdrawal age to. Raised 63 -> 64 on 1 Jul 2026. An SRS account keeps the
+  // age prevailing at its FIRST contribution for life, so accounts opened
+  // before that date stay at 63 — hence this is a default, not a constant.
+  const [withdrawalAge, setWithdrawalAge] = useState(64);
   const [initialAmount, setInitialAmount] = useState(0);
   const [contribution, setContribution] = useState(0);
   const [freq, setFreq] = useState<Freq>("yearly");
@@ -126,7 +130,13 @@ export function SrsUserPanel({
           <input id="wd-age" type="number" min={0} max={120} value={withdrawalAge}
             onChange={(e) => setWithdrawalAge(Math.max(0, Number(e.target.value)))}
             className={inputCls} aria-label="Withdrawal age" />
-          <p className="mt-1 text-xs text-[var(--color-muted)]">{proj.years} years to grow</p>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            {proj.years} years to grow · statutory retirement age is 64 from 1 Jul 2026
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-muted)]">
+            SRS locks this to the age in force at your <em>first</em> contribution — if you opened
+            the account before 1 Jul 2026, set 63.
+          </p>
         </div>
 
         <div>

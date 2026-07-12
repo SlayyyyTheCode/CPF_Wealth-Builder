@@ -153,6 +153,10 @@ def run_simulation(inp: SimulationInput, resolve_policy: Callable[[int], dict]) 
                 ovf_year["ma_to_sa"] += ma_ovf_int["to_SA"]
                 ovf_year["ma_to_ra"] += ma_ovf_int["to_RA"]
                 ovf_year["ma_to_oa"] += ma_ovf_int["to_OA"]
+                # Interest the SA accrued before closing at 55, routed out of
+                # the now-closed account (RA up to the sum, then OA).
+                ovf_year["sa_to_ra"] += ma_ovf_int["sa_close_to_RA"]
+                ovf_year["sa_to_oa"] += ma_ovf_int["sa_close_to_OA"]
                 events.append(Event("INTEREST_CREDITED", year, 12,
                                     {"base": base_total, "extra": extra_total}))
                 years.append(YearResult(

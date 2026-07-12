@@ -455,9 +455,13 @@ export default function OaPage({
             <p className="mt-0.5 font-semibold tabular-nums text-[var(--color-primary)]">{sgd(oaAnnualIn)}</p>
           </div>
         </div>
-        <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Employee + employer contribution flowing to OA this year (from the projection engine), on
-          wage capped at the Ordinary Wage ceiling ({sgd(owCeiling)}/mth).
+        <p className="mt-3 max-w-3xl text-xs text-[var(--color-muted)]">
+          Employee + employer contribution flowing to OA this year (from the projection engine).{" "}
+          <span className="font-semibold">
+            The {sgd(owCeiling)}/mth Ordinary Wage ceiling caps the WAGE, not the contribution
+          </span>{" "}
+          — CPF is charged as a percentage of the capped wage, so salary above {sgd(owCeiling)}/mth
+          attracts no CPF at all and is simply paid to you as cash.
         </p>
       </div>
 
@@ -641,7 +645,8 @@ export default function OaPage({
               aria-label="Yearly OA top-up amount in Singapore dollars"
             />
             <p className="mt-1 text-xs text-[var(--color-muted)]">
-              Capped at {sgd(OA_TOPUP_CAP)}/yr
+              Capped at {sgd(OA_TOPUP_CAP)}/yr — a top-up limit, unrelated to the {sgd(owCeiling)}
+              /month wage ceiling above
             </p>
           </div>
           <div>
