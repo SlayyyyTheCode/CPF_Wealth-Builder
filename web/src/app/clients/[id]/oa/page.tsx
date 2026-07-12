@@ -23,12 +23,17 @@ const OA_RATE = 0.025;
 const EMPTY_YEARS: SimResult["years"] = [];
 
 // Estimated extra interest earned on the OA portion of combined CPF balances.
-// Below 55: +1% on the first $60k combined, OA counted first and capped at $20k.
-// 55+:      +2% on the first $30k + 1% on the next $30k, OA still capped at $20k.
-// OA is counted first, so its whole $20k slice sits in the top tier either way.
-function oaExtraInterest(oa: number, age: number): number {
-  const oaSlice = Math.min(oa, 20000);
-  return age >= 55 ? 0.02 * oaSlice : 0.01 * oaSlice;
+// The band fills in priority order RA -> OA (OA capped at $20k). Below 55 there
+// is no RA, so OA sits first in the +1% band. From 55 the RA fills the +2%/+1%
+// tiers FIRST, so a large RA leaves little or no band room for the OA.
+function oaExtraInterest(oa: number, age: number, ra = 0): number {
+  const oaSlice = Math.min(Math.max(oa, 0), 20000);
+  if (age < 55) return 0.01 * oaSlice;
+  const t1Room = Math.max(30000 - Math.max(ra, 0), 0);
+  const t2Room = Math.max(30000 - Math.max(ra - 30000, 0), 0);
+  const inT1 = Math.min(oaSlice, t1Room);
+  const inT2 = Math.min(oaSlice - inT1, t2Room);
+  return 0.02 * inT1 + 0.01 * inT2;
 }
 
 export default function OaPage({
@@ -181,7 +186,7 @@ export default function OaPage({
   const oaBalance = adj ? adj.closing : (yr?.closing.OA ?? 0);
   const oaOpening = adj ? adj.opening : (yr?.opening?.OA ?? 0);
   const oaInterest = adj ? adj.interest : (yr?.interest_by_account?.OA ?? 0);
-  const extraInterest = yr ? oaExtraInterest(oaBalance, age) : 0;
+  const extraInterest = yr ? oaExtraInterest(oaBalance, age, yr.closing.RA) : 0;
   // Combined CPF is the raw projection total (same across all account tabs);
   // the OA-only mortgage what-if does not change this cross-account figure.
   const combined = yr
@@ -421,7 +426,7 @@ export default function OaPage({
                 <p className="text-xs text-[var(--color-muted)]">Est. extra interest</p>
                 <p className={kpiClass}>{sgd(extraInterest)}</p>
                 <p className="mt-1 text-xs text-[var(--color-muted)]">
-                  {age >= 55 ? "+2% on OA (capped $20k)" : "+1% on OA (capped $20k)"}
+                  {age >= 55 ? "band room left after RA, OA capped $20k" : "+1% on OA (capped $20k)"}
                 </p>
               </div>
             </div>

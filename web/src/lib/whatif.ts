@@ -105,13 +105,23 @@ function annuityExtra(amt: number, startAge: number, age: number, rate: number):
 const retClosing = (y: YearRow) => (y.closing.RA > 0 ? y.closing.RA : y.closing.SA);
 
 /** One year of OA interest: the 2.5% floor plus the extra interest.
- *  Extra interest: OA is counted FIRST toward the combined-balance tiers and is
- *  capped at $20k, so its whole slice always sits in the top tier — +1% below
- *  55, +2% from 55 (where the top tier is the first $30k of combined). */
+ *
+ *  Extra interest fills in priority order RA → OA (OA capped at $20k). Below
+ *  55 there is no RA, so OA genuinely sits first in the +1% band. From 55 the
+ *  RA fills the +2%/+1% tiers FIRST: a large RA leaves little or no band room,
+ *  so OA's extra interest shrinks toward zero — crediting OA its +2%
+ *  unconditionally overstated the split by up to $400/yr once the RA was full.
+ *  `ra` is that line's RA balance, used to compute the band room left. */
 export const OA_EXTRA_CAP = 20_000;
-function oaYearInterest(bal: number, age: number): number {
-  const extraRate = age >= 55 ? 0.02 : 0.01;
-  return bal * OA_RATE + extraRate * Math.min(Math.max(bal, 0), OA_EXTRA_CAP);
+function oaYearInterest(bal: number, age: number, ra = 0): number {
+  const oaSlice = Math.min(Math.max(bal, 0), OA_EXTRA_CAP);
+  if (age < 55) return bal * OA_RATE + 0.01 * oaSlice;
+  const r = Math.max(ra, 0);
+  const t1Room = Math.max(30_000 - r, 0);                      // +2% tier left after RA
+  const t2Room = Math.max(30_000 - Math.max(r - 30_000, 0), 0); // +1% tier left after RA
+  const inT1 = Math.min(oaSlice, t1Room);
+  const inT2 = Math.min(oaSlice - inT1, t2Room);
+  return bal * OA_RATE + 0.02 * inT1 + 0.01 * inT2;
 }
 
 /** RA interest for one year: the 4% floor plus the 55+ extra-interest tiers
@@ -259,8 +269,8 @@ export function simulateOaSplit(
     );
     const drain = mort + transferOut;
 
-    oaOnly = Math.max(oaOnly + oaYearInterest(oaOnly, y.age) + contrib - drain, 0);
-    retained = Math.max(retained + oaYearInterest(retained, y.age) + toOa - drain, 0);
+    oaOnly = Math.max(oaOnly + oaYearInterest(oaOnly, y.age, raOnly) + contrib - drain, 0);
+    retained = Math.max(retained + oaYearInterest(retained, y.age, raSplit) + toOa - drain, 0);
     invested = invested * (1 + r) + toInvest;
 
     // Age 55: the RA is filled from the SA first, and the OA is drawn on only
