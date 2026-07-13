@@ -386,10 +386,10 @@ export default function SaPage({
           <p className="mt-3 text-sm text-[var(--color-muted)]">No SA inflow or overflow this year.</p>
         )}
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Once MediSave reaches the Basic Healthcare Sum (BHS), the excess overflows into the SA
-          (before 55) and compounds at the SA rate. At 55, amounts above your retirement sum move
-          from SA to OA; SA contributions also overflow to OA once FRS is reached. If your SA + OA
-          can&apos;t meet the FRS at 55, up to $5,000 stays withdrawable in your OA.
+          When MediSave gets full, the extra flows into your SA and earns the SA rate. At 55, your SA
+          closes: it funds your Retirement Account first, and anything left over moves to your OA. If
+          your SA and OA together still can&apos;t reach the Full Retirement Sum, up to $5,000 stays
+          in your OA for you to withdraw.
         </p>
       </div>
 
@@ -510,12 +510,13 @@ export default function SaPage({
             Recalculate
           </button>
           <p className="text-xs text-[var(--color-muted)]">
-            The top-up and transfer each run from their own start age for the
-            chosen &quot;years applied&quot;. Note: once the SA reaches the FRS,
-            further top-ups and transfers are not allowed — so both amounts
-            <span className="font-medium"> and any remaining &quot;years
-            applied&quot; become ineffective</span> from that point. Set a large
-            &quot;years applied&quot; to model contributing continuously until FRS.
+            Your top-up and transfer each start at their own age and run for the number of years you
+            set.{" "}
+            <span className="font-medium">
+              Once your SA hits the Full Retirement Sum, you can&apos;t add any more
+            </span>{" "}
+            — anything after that point simply stops. Your balance keeps growing at 4%, though. Set a
+            big number of years if you want to keep adding until you reach the limit.
           </p>
         </div>
 
@@ -679,7 +680,7 @@ export default function SaPage({
         )}
 
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Estimate: the baseline already includes the MA → SA overflow after the BHS is reached. On top of that, starting at the chosen age, each year&apos;s top-up is compounded at the ~4% SA floor rate. Top-ups are only allowed until the FRS is reached.
+          Your baseline already includes MediSave overflow. On top of that, each year&apos;s top-up grows at 4% from the age you choose — until you hit the Full Retirement Sum, after which no more can be added.
         </p>
       </div>
     </>

@@ -516,7 +516,7 @@ export default function MedisavePage({
 
         <p className="mt-2 text-xs text-[var(--color-muted)]">
           Each year the insurance premium is withdrawn from MA; in between, the balance keeps earning
-          the MA rate (monthly) and receiving the projected MA contribution, capped at that year&apos;s
+          the MediSave rate each month and receiving your projected contribution, capped at that year&apos;s
           BHS. Prefilled with the current MA balance — edit any field, then Calculate.
         </p>
       </div>
@@ -626,7 +626,7 @@ export default function MedisavePage({
 
         <p className="mt-3 text-xs text-[var(--color-muted)]">
           Estimate: starting at the chosen age, each year&apos;s voluntary MA top-up is compounded at
-          the 4% MA floor rate and added to the projected balance. MA top-ups are only accepted up to
+          4% and added to your projected balance. Top-ups are only accepted up to
           the prevailing BHS.
         </p>
       </div>

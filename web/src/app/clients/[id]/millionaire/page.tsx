@@ -156,7 +156,7 @@ export default function MillionairePage({ params }: { params: Promise<{ id: stri
       <WhatIfCard
         uid="wi-proj"
         title="Projected CPF LIFE Delay Payouts (65 → 70)"
-        description="Every year you defer past 65 raises your payout by ~7% — up to +35% at age 70 — permanently. The balance also keeps compounding at 4% while you wait. Defaults to Overview's “Current Amount (w/o MA) (age 65)” from the What-If Scenario (OA + SA/RA, payout-eligible)."
+        description="Every year you wait past 65 raises your monthly payout by about 7% — up to 35% more at age 70, for life. Your savings also keep earning 4% while you wait. Starts from your projected balance at 65."
         defaultRa65={raAt65Actual}
       />
       <WhatIfCard
@@ -462,7 +462,7 @@ function CpfisCard({ member }: { member: Member }) {
       <h2 className="text-base font-semibold">CPFIS-OA Investment</h2>
       <p className="mt-1 text-sm text-[var(--color-muted)]">
         Invest OA above $20,000 (SA must be ≥ $40,000; MA can&apos;t be touched). Stocks capped at 35%,
-        gold at 10% of investible OA.
+        and gold at 10% of what you can invest.
       </p>
 
       <div className="mt-3 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm sm:grid-cols-3">
@@ -560,7 +560,7 @@ function CpfisWhatIfCard({ member }: { member: Member }) {
       <p className="mt-1 text-sm text-[var(--color-muted)]">
         Same CPFIS-OA math as above, but ignores the &quot;SA ≥ $40,000&quot; eligibility gate — model
         any amount you choose to invest from OA above $20,000, regardless of your current SA balance.
-        Stocks/gold caps still apply.
+        The stock and gold limits still apply.
       </p>
 
       <div className="mt-3 grid gap-3 rounded-xl bg-[var(--color-surface-raised)] p-3 text-sm sm:grid-cols-3">

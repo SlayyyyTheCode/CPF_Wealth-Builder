@@ -42,7 +42,7 @@ function ProjectionPanel({
     <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
       <h2 className="text-lg font-bold text-[var(--color-fg)]">Projected CPF Figures across the Years</h2>
       <p className="mt-1 text-sm text-[var(--color-muted)]">
-        Targets rise over time. Pick how many years ahead to see the projected sums you&apos;ll need to hit.
+        These targets go up every year. Pick how far ahead to look and see what you&apos;ll need to hit.
       </p>
 
       <div className="mt-4 max-w-xs">
@@ -75,7 +75,7 @@ function ProjectionPanel({
         ))}
       </div>
       <p className="mt-3 text-xs text-[var(--color-muted)]">
-        Projected as today&apos;s sum compounded at the policy growth assumptions. Actual future values are set by CPF each year.
+        Estimated by growing today&apos;s figures at the expected yearly rate. CPF sets the real numbers each year.
       </p>
     </div>
   );
@@ -256,9 +256,9 @@ function AccelerationTips({
         ))}
       </div>
       <p className="mt-3 text-xs text-[var(--color-muted)]">
-        Top-ups are capped (SA at the FRS, MA at the BHS, RA at the ERS) and SA/OA→SA transfers are
-        irreversible. Tax relief is subject to the $80,000 personal relief ceiling — see the
-        Tax Relief Strategies tab.
+        Two things to remember: you can&apos;t top up an account past its limit, and moving money
+        from your OA to your SA can never be undone. Tax relief is also capped at $80,000 a year
+        across everything — see the Tax Relief Strategies tab.
       </p>
     </div>
   );
