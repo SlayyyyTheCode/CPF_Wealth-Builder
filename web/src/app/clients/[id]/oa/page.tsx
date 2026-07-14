@@ -456,12 +456,11 @@ export default function OaPage({
           </div>
         </div>
         <p className="mt-3 max-w-2xl text-sm text-[var(--color-muted)]">
-          What you and your employer put into your OA this year.{" "}
           <span className="font-semibold text-[var(--color-fg)]">
-            Only the first {sgd(owCeiling)}/month of your salary counts for CPF.
+            Only the first {sgd(owCeiling)}/month of salary counts for CPF.
           </span>{" "}
-          Anything you earn above that gets no CPF at all — it&apos;s simply paid to you as cash.
-          (This caps your <em>salary</em>, not your CPF: your CPF is a percentage of it.)
+          Earn more and the extra is just paid to you as cash. This caps your <em>salary</em>, not
+          your CPF — your CPF is a percentage of it.
         </p>
       </div>
 
@@ -546,12 +545,9 @@ export default function OaPage({
         )}
 
         <p className="mt-4 max-w-2xl text-sm text-[var(--color-muted)]">
-          <span className="font-semibold text-[var(--color-fg)]">
-            Your OA is last in line.
-          </span>{" "}
-          When MediSave gets full, the extra goes to your SA first — not your OA. It only reaches
-          your OA once your SA is full too. Money that arrives this way then earns the OA rate from
-          then on. These are the same amounts the SA tab shows leaving your SA.
+          <span className="font-semibold text-[var(--color-fg)]">Your OA is last in line.</span>{" "}
+          When MediSave fills up, the extra goes to your SA first. It only reaches your OA once your
+          SA is full too.
         </p>
       </div>
 
@@ -583,8 +579,8 @@ export default function OaPage({
           </div>
         </div>
         <p className="mt-3 max-w-2xl text-sm text-[var(--color-muted)]">
-          This bonus interest is already included in the figures above. From 55, your Retirement
-          Account gets first claim on it, so a large RA leaves less bonus for your OA.
+          Already included above. From 55 your Retirement Account claims this bonus first, so a big
+          RA leaves less for your OA.
         </p>
       </div>
 
@@ -615,9 +611,8 @@ export default function OaPage({
           </p>
         )}
         <p className="mt-3 max-w-2xl text-sm text-[var(--color-muted)]">
-          At 55 your SA closes and forms your Retirement Account. Your SA is used first. Your OA is
-          only tapped if your SA can&apos;t reach the Full Retirement Sum on its own — whatever is
-          left stays in your OA.
+          At 55 your SA closes into your Retirement Account. Your OA is only used if your SA
+          can&apos;t reach the Full Retirement Sum alone.
         </p>
       </div>
 
@@ -641,8 +636,7 @@ export default function OaPage({
               aria-label="Yearly OA top-up amount in Singapore dollars"
             />
             <p className="mt-1 text-xs text-[var(--color-muted)]">
-              Capped at {sgd(OA_TOPUP_CAP)}/yr — a top-up limit, unrelated to the {sgd(owCeiling)}
-              /month wage ceiling above
+              Max {sgd(OA_TOPUP_CAP)}/yr (not the same as the salary cap above)
             </p>
           </div>
           <div>
@@ -727,13 +721,11 @@ export default function OaPage({
         )}
 
         <p className="mt-3 max-w-2xl text-sm text-[var(--color-muted)]">
-          Each year&apos;s top-up is added to your OA and grows at 2.5% from the age you choose. It
-          also feeds the investment calculator below, so you can invest it like any other OA money.
+          Each top-up grows at 2.5% from the age you pick. You can invest it below.
         </p>
         <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted)]">
-          <span className="font-semibold text-[var(--color-fg)]">This is a &ldquo;what if&rdquo;.</span>{" "}
-          CPF doesn&apos;t actually let you top up your OA on its own — cash top-ups go to your SA or
-          RA. Use this to explore the idea, not as something you can do today.
+          <span className="font-semibold text-[var(--color-fg)]">What-if only.</span>{" "}
+          CPF doesn&apos;t let you top up your OA on its own — cash top-ups go to your SA or RA.
         </p>
       </div>
 
@@ -784,11 +776,9 @@ export default function OaPage({
         )}
 
         <p className="mt-3 max-w-2xl text-sm text-[var(--color-muted)]">
-          <span className="font-semibold text-[var(--color-fg)]">A common misunderstanding:</span>{" "}
-          hitting the FRS does <em>not</em> mean your SA starts pouring into your OA. Before 55, your
-          SA keeps taking its normal contributions even past the FRS. What actually starts filling
-          your OA is MediSave overflow — once <em>both</em> MediSave and your SA are full, it has
-          nowhere else to go. These ages come from your own projection, not a rule of thumb.
+          <span className="font-semibold text-[var(--color-fg)]">Common misunderstanding:</span>{" "}
+          hitting the FRS doesn&apos;t send your SA into your OA. Before 55 your SA keeps filling up.
+          It&apos;s MediSave overflow that reaches your OA — once both are full.
         </p>
       </div>
 
@@ -796,8 +786,7 @@ export default function OaPage({
       <div className={`${cardClass} mb-4`}>
         <h3 className={`${labelClass} mb-1`}>Top-up what-if calculator (CPF-OA Investment)</h3>
         <p className="mb-4 max-w-3xl text-sm text-[var(--color-muted)]">
-          Keep some money safe in your OA, and invest the rest. Compare what you&apos;d end up with
-          either way. Drag the timeline to check any age.
+          Keep some money in your OA, invest the rest, and compare. Drag to any age.
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1050,9 +1039,8 @@ export default function OaPage({
                 In today&apos;s dollars — after {invInflation}% inflation
               </h4>
               <p className="mt-1 max-w-3xl text-sm text-[var(--color-muted)]">
-                The same two lines, but showing what your money could actually <em>buy</em>. Your OA
-                earns 2.5%, which is roughly what prices rise by — so money left in the OA barely
-                keeps up.
+                What your money could actually <em>buy</em>. Your OA earns 2.5% — roughly what
+                prices rise by — so it barely keeps up.
               </p>
             </div>
 
@@ -1138,52 +1126,16 @@ export default function OaPage({
         )}
 
         <details className="mt-4 rounded-xl bg-[var(--color-surface-raised)] p-3">
-          <summary className="cursor-pointer text-sm font-semibold">
-            How this is worked out
-          </summary>
-          <ul className="mt-3 max-w-2xl space-y-2 text-sm text-[var(--color-muted)]">
-            <li>
-              <span className="font-semibold text-[var(--color-fg)]">The split.</span> From your
-              start age, the money you keep stays in the OA. Everything above it is invested. Both
-              lines run through the same projection, so the difference between them is caused by
-              investing and nothing else.
-            </li>
-            <li>
-              <span className="font-semibold text-[var(--color-fg)]">What goes into your OA.</span>{" "}
-              Your CPF from salary, any overflow from MediSave and SA, and your yearly top-up. All
-              of it can be invested.
-            </li>
-            <li>
-              <span className="font-semibold text-[var(--color-fg)]">
-                Investing doesn&apos;t create money.
-              </span>{" "}
-              You can only invest CPF money that is already in your OA. So the monthly amount is
-              moved <em>out</em> of your OA and into investments — it is not extra cash. Raising
-              &ldquo;Initial investment&rdquo; lowers &ldquo;Keep in OA&rdquo; for the same reason.
-            </li>
-            <li>
-              <span className="font-semibold text-[var(--color-fg)]">At age 55.</span> Your
-              Retirement Account is created, funded from your SA first. Your OA is only used if the
-              SA isn&apos;t enough. Nothing is lost — both lines include the RA. Investments are{" "}
-              <em>not</em> sold at 55, so money you invested stays out of the RA.
-            </li>
-            <li>
-              <span className="font-semibold text-[var(--color-fg)]">Your home loan counts.</span>{" "}
-              If you pay a mortgage from your OA, that money is gone and can&apos;t be invested. It
-              is taken off both lines equally, so it never favours one over the other.
-            </li>
-            <li>
-              <span className="font-semibold text-[var(--color-fg)]">
-                &ldquo;Today&apos;s dollars&rdquo;
-              </span>{" "}
-              shows what your money would actually <em>buy</em> in future, after inflation. It
-              matters because the OA rate (2.5%) is close to inflation itself.
-            </li>
-            <li>
-              <span className="font-semibold text-[var(--color-fg)]">One thing to note.</span> In
-              real life CPF makes you keep $20,000 in your OA before you can invest. This calculator
-              lets you ignore that, so you can try any scenario.
-            </li>
+          <summary className="cursor-pointer text-sm font-semibold">How this works</summary>
+          <ul className="mt-3 max-w-xl space-y-1.5 text-sm text-[var(--color-muted)]">
+            <li>Money you keep stays in your OA. The rest gets invested.</li>
+            <li>Both lines use the same projection — the gap is purely the investing.</li>
+            <li>Your OA gets salary CPF, overflow, and top-ups. All of it can be invested.</li>
+            <li>Investing moves money <em>out</em> of your OA. It&apos;s not extra cash.</li>
+            <li>At 55, your SA funds your Retirement Account first. Investments aren&apos;t sold.</li>
+            <li>Home loan payments come out of your OA, so they can&apos;t be invested.</li>
+            <li>&ldquo;Today&apos;s dollars&rdquo; shows what it would actually buy after inflation.</li>
+            <li>Real CPF makes you keep $20,000 before investing. Ignored here.</li>
           </ul>
         </details>
       </div>
@@ -1196,9 +1148,8 @@ export default function OaPage({
         <RocketIcon className="mt-0.5 h-8 w-8 shrink-0" />
         <p className="text-sm leading-relaxed">
           <span className="font-semibold">How your OA gets funded.</span>{" "}
-          When you&apos;re young, most of your CPF goes to your OA, and that share shrinks as you get
-          older. That&apos;s why the OA builds up fastest early on — and why it&apos;s what makes a
-          home affordable.
+          Most of your CPF goes to your OA when you&apos;re young, and less as you age. That&apos;s
+          why it builds fastest early — and why it&apos;s what makes a home affordable.
         </p>
       </div>
     </>

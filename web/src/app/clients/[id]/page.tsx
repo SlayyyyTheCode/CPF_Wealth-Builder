@@ -109,36 +109,31 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div>
           <NetWorthChart years={res.years} />
-          <p className="mt-2 text-xs text-[var(--color-muted)]">Your CPF is split between OA, SA and MediSave based on your age, with overflow rules applied and interest added each year.</p>
+          <p className="mt-2 text-xs text-[var(--color-muted)]">Your CPF is split by age across OA, SA and MediSave, with interest added yearly.</p>
         </div>
         <div className="grid gap-4">
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
             <h3 className="mb-2 text-sm font-semibold">Retirement readiness</h3>
             <ReadinessRing r={res.readiness} />
-            <p className="mt-2 text-xs text-[var(--color-muted)]">Based mostly on how close your retirement savings are to the Full Retirement Sum (70%), plus your MediSave (30%).</p>
+            <p className="mt-2 text-xs text-[var(--color-muted)]">How close you are to the Full Retirement Sum (70%) and your MediSave target (30%).</p>
           </div>
           <div>
             <CpfLifeCard c={res.cpf_life} />
-            <p className="mt-2 text-xs text-[var(--color-muted)]">Our estimate of your monthly payout for life, assuming your savings earn 4%. CPF&apos;s official figure may differ.</p>
+            <p className="mt-2 text-xs text-[var(--color-muted)]">Estimated monthly payout for life. CPF&apos;s official figure may differ.</p>
           </div>
         </div>
       </div>
       <div className="mt-4">
         <AccountBreakdownChart years={res.years} />
-        <p className="mt-2 text-xs text-[var(--color-muted)]">What each of your four CPF accounts holds at every age.</p>
+        <p className="mt-2 text-xs text-[var(--color-muted)]">What each account holds at every age.</p>
       </div>
       {/* What-If Scenario — combines the OA / SA / MA top-up calculators */}
       <section aria-label="What-if scenario" className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-semibold">What-If Scenario</h3>
         <p className="mt-1 text-xs text-[var(--color-muted)]">
-          See what your CPF could look like if you follow the plans you set on the
-          OA and SA tabs. Drag to any age to compare.{" "}
-          <span className="font-semibold text-[var(--color-fg)]">
-            MediSave is not counted here
-          </span>{" "}
-          — it can only be used for healthcare, not retirement payouts or spending. You&apos;ll find
-          it in its own card below. (The CPF-OA investment plan only shows up here if you ticked it
-          on the OA tab.)
+          Your CPF if you follow the plans set on the OA and SA tabs. Drag to any age.{" "}
+          <span className="font-semibold text-[var(--color-fg)]">MediSave isn&apos;t counted</span>{" "}
+          — it&apos;s for healthcare only, and has its own card below.
         </p>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -157,7 +152,7 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
             </p>
           </div>
         </div>
-        <p className="mt-2 text-xs text-[var(--color-muted)]">Counts your OA and SA/RA only — the money that can actually fund your retirement.</p>
+        <p className="mt-2 text-xs text-[var(--color-muted)]">OA and SA/RA only — the money that can fund your retirement.</p>
 
         <div className="mt-4">
           <YearScrubber ages={ages} value={selAge} onChange={setScenAge} />

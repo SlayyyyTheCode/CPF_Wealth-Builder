@@ -386,10 +386,8 @@ export default function SaPage({
           <p className="mt-3 text-sm text-[var(--color-muted)]">No SA inflow or overflow this year.</p>
         )}
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          When MediSave gets full, the extra flows into your SA and earns the SA rate. At 55, your SA
-          closes: it funds your Retirement Account first, and anything left over moves to your OA. If
-          your SA and OA together still can&apos;t reach the Full Retirement Sum, up to $5,000 stays
-          in your OA for you to withdraw.
+          When MediSave fills up, the extra flows into your SA. At 55 your SA closes and funds your
+          Retirement Account — anything left over moves to your OA.
         </p>
       </div>
 
@@ -510,13 +508,10 @@ export default function SaPage({
             Recalculate
           </button>
           <p className="text-xs text-[var(--color-muted)]">
-            Your top-up and transfer each start at their own age and run for the number of years you
-            set.{" "}
             <span className="font-medium">
-              Once your SA hits the Full Retirement Sum, you can&apos;t add any more
+              Once your SA hits the Full Retirement Sum, you can&apos;t add any more.
             </span>{" "}
-            — anything after that point simply stops. Your balance keeps growing at 4%, though. Set a
-            big number of years if you want to keep adding until you reach the limit.
+            Your balance still keeps growing at 4%.
           </p>
         </div>
 
@@ -680,7 +675,7 @@ export default function SaPage({
         )}
 
         <p className="mt-3 text-xs text-[var(--color-muted)]">
-          Your baseline already includes MediSave overflow. On top of that, each year&apos;s top-up grows at 4% from the age you choose — until you hit the Full Retirement Sum, after which no more can be added.
+          Each top-up grows at 4% from the age you pick, until you hit the Full Retirement Sum.
         </p>
       </div>
     </>

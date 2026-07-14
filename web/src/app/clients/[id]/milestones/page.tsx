@@ -42,7 +42,7 @@ function ProjectionPanel({
     <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
       <h2 className="text-lg font-bold text-[var(--color-fg)]">Projected CPF Figures across the Years</h2>
       <p className="mt-1 text-sm text-[var(--color-muted)]">
-        These targets go up every year. Pick how far ahead to look and see what you&apos;ll need to hit.
+        These targets rise every year. Pick how far ahead to look.
       </p>
 
       <div className="mt-4 max-w-xs">
@@ -75,7 +75,7 @@ function ProjectionPanel({
         ))}
       </div>
       <p className="mt-3 text-xs text-[var(--color-muted)]">
-        Estimated by growing today&apos;s figures at the expected yearly rate. CPF sets the real numbers each year.
+        Estimates. CPF sets the real numbers each year.
       </p>
     </div>
   );
@@ -231,7 +231,7 @@ function AccelerationTips({
     <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
       <h2 className="text-lg font-bold text-[var(--color-fg)]">How to hit these targets faster</h2>
       <p className="mt-1 text-sm text-[var(--color-muted)]">
-        The levers that move each milestone, with this client&apos;s remaining gap today.
+        What moves each target, and how far you have to go.
       </p>
       {/* Columns divided by rules rather than nested cards (see note above). */}
       <div className="mt-5 grid gap-x-6 gap-y-6 lg:grid-cols-3 lg:divide-x lg:divide-[var(--color-border)]">
@@ -256,9 +256,8 @@ function AccelerationTips({
         ))}
       </div>
       <p className="mt-3 text-xs text-[var(--color-muted)]">
-        Two things to remember: you can&apos;t top up an account past its limit, and moving money
-        from your OA to your SA can never be undone. Tax relief is also capped at $80,000 a year
-        across everything — see the Tax Relief Strategies tab.
+        You can&apos;t top up past an account&apos;s limit, and moving OA to SA can never be undone.
+        Tax relief is capped at $80,000/yr.
       </p>
     </div>
   );
