@@ -246,7 +246,7 @@ function PersonalTargets({ years }: { years: SimResult["years"] }) {
           <h3 className="text-sm font-semibold">From Your CPF (OA + SA + RA)</h3>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="pt-cpf-mth" className={labelCls}>Income Wanted ($/Mth)</label>
+              <label htmlFor="pt-cpf-mth" className={labelCls}>Desired Income ($/Mth)</label>
               <NumberInput id="pt-cpf-mth" min={0} step={100} value={cpfMonthly}
                 onChange={setCpfMonthly} className={inputCls} aria-label="CPF monthly income wanted" />
             </div>
@@ -294,7 +294,7 @@ function PersonalTargets({ years }: { years: SimResult["years"] }) {
           <h3 className="text-sm font-semibold">From Your SRS</h3>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="pt-srs-mth" className={labelCls}>Income Wanted ($/Mth)</label>
+              <label htmlFor="pt-srs-mth" className={labelCls}>Desired Income ($/Mth)</label>
               <NumberInput id="pt-srs-mth" min={0} step={100} value={srsMonthly}
                 onChange={setSrsMonthly} className={inputCls} aria-label="SRS monthly income wanted" />
             </div>
