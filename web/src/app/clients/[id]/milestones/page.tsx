@@ -222,10 +222,13 @@ function PersonalTargets({ years }: { years: SimResult["years"] }) {
 
   // CPF: pot needed to pay the income for life (to 90), earning 4%.
   const cpfNeeded = requiredLumpSum(cpfMonthly, cpfAge, LONGEVITY, CPF_RATE);
-  // What the projection already gives you at that age (OA + SA/RA).
+  // What the projection already gives you at that age: OA + SA + RA.
+  // Before 55 the money sits in OA + SA (RA is 0). At 55 the SA closes and
+  // its balance forms the RA, so from then on SA is 0 and it is OA + RA.
+  // Summing all three covers both sides of that transition in one expression.
   const rowAtAge = years.find((y) => y.age === cpfAge);
   const cpfProjected = rowAtAge
-    ? rowAtAge.closing.OA + Math.max(rowAtAge.closing.SA, rowAtAge.closing.RA)
+    ? rowAtAge.closing.OA + rowAtAge.closing.SA + rowAtAge.closing.RA
     : null;
   const cpfGap = cpfProjected !== null ? cpfNeeded - cpfProjected : null;
 
