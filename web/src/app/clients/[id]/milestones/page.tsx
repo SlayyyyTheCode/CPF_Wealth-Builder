@@ -3,9 +3,20 @@ import { use, useEffect, useState } from "react";
 import { simulate, getMember, getActivePolicy, peekMember, peekSim, peekPolicy } from "@/lib/api";
 import type { SimResult, Member } from "@/lib/types";
 import { TargetTimeline } from "@/components/target-timeline";
+import { NumberInput } from "@/components/number-input";
 import { PageHeading, MilestonesIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
+
+// Lump sum needed at `fromAge` to pay `monthly` every month until `toAge`,
+// while the balance keeps earning `ratePct`/yr. Standard present value of a
+// level monthly annuity: PV = M x (1 - (1+r)^-n) / r.
+function requiredLumpSum(monthly: number, fromAge: number, toAge: number, ratePct: number): number {
+  const r = ratePct / 100 / 12;
+  const n = Math.max(Math.round((toAge - fromAge) * 12), 0);
+  if (n <= 0 || monthly <= 0) return 0;
+  return r === 0 ? monthly * n : (monthly * (1 - Math.pow(1 + r, -n))) / r;
+}
 
 interface PolicySnapshot {
   bhs: number | string;
@@ -182,7 +193,142 @@ export default function MilestonesPage({
         ersGap={Math.max(ers - bal.RA, 0)}
         age={member ? new Date().getFullYear() - new Date(member.dob).getFullYear() : 0}
       />
+
+      <PersonalTargets years={res.years} />
     </>
+  );
+}
+
+/* Reverse planner: pick a monthly income and an age, see the pot you need.
+   Two independent calculators — CPF (OA + SA + RA) and SRS. */
+function PersonalTargets({ years }: { years: SimResult["years"] }) {
+  const cardCls =
+    "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]";
+  const inputCls =
+    "w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm";
+  const labelCls = "mb-1 block text-sm text-[var(--color-muted)]";
+
+  // CPF section state
+  const [cpfMonthly, setCpfMonthly] = useState(2000);
+  const [cpfAge, setCpfAge] = useState(65);
+  // SRS section state
+  const [srsMonthly, setSrsMonthly] = useState(1000);
+  const [srsAge, setSrsAge] = useState(64);
+  const [srsYears, setSrsYears] = useState(10);
+  const [srsRate, setSrsRate] = useState(2.5);
+
+  const LONGEVITY = 90;
+  const CPF_RATE = 4; // RA earns 4%
+
+  // CPF: pot needed to pay the income for life (to 90), earning 4%.
+  const cpfNeeded = requiredLumpSum(cpfMonthly, cpfAge, LONGEVITY, CPF_RATE);
+  // What the projection already gives you at that age (OA + SA/RA).
+  const rowAtAge = years.find((y) => y.age === cpfAge);
+  const cpfProjected = rowAtAge
+    ? rowAtAge.closing.OA + Math.max(rowAtAge.closing.SA, rowAtAge.closing.RA)
+    : null;
+  const cpfGap = cpfProjected !== null ? cpfNeeded - cpfProjected : null;
+
+  // SRS: separate income, drawn down over a chosen window.
+  const srsNeeded = requiredLumpSum(srsMonthly, srsAge, srsAge + srsYears, srsRate);
+
+  return (
+    <div className={`${cardCls} mt-6`}>
+      <h2 className="text-lg font-bold text-[var(--color-fg)]">Personal Targets</h2>
+      <p className="mt-1 max-w-2xl text-sm text-[var(--color-muted)]">
+        Tell us the monthly income you want and when. We&apos;ll work out the savings you need to
+        get there.
+      </p>
+
+      <div className="mt-5 grid gap-6 lg:grid-cols-2 lg:divide-x lg:divide-[var(--color-border)]">
+        {/* ── CPF: OA + SA + RA ── */}
+        <div>
+          <h3 className="text-sm font-semibold">From Your CPF (OA + SA + RA)</h3>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="pt-cpf-mth" className={labelCls}>Income Wanted ($/Mth)</label>
+              <NumberInput id="pt-cpf-mth" min={0} step={100} value={cpfMonthly}
+                onChange={setCpfMonthly} className={inputCls} aria-label="CPF monthly income wanted" />
+            </div>
+            <div>
+              <label htmlFor="pt-cpf-age" className={labelCls}>From Age</label>
+              <NumberInput id="pt-cpf-age" min={55} max={90} step={1} value={cpfAge}
+                onChange={setCpfAge} className={inputCls} aria-label="CPF payout age" />
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl bg-[var(--color-surface-raised)] p-4">
+            <p className="text-xs text-[var(--color-muted)]">
+              OA + SA + RA You Need By Age {cpfAge}
+            </p>
+            <p className="mt-0.5 text-2xl font-bold tabular-nums text-[var(--color-primary)]">
+              {sgd(Math.round(cpfNeeded))}
+            </p>
+            {cpfProjected !== null && (
+              <p className="mt-2 text-xs text-[var(--color-muted)]">
+                You&apos;re On Track For{" "}
+                <span className="font-semibold tabular-nums text-[var(--color-fg)]">
+                  {sgd(Math.round(cpfProjected))}
+                </span>{" "}
+                —{" "}
+                {cpfGap !== null && cpfGap > 0 ? (
+                  <span className="font-semibold text-[var(--color-error)]">
+                    {sgd(Math.round(cpfGap))} Short
+                  </span>
+                ) : (
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                    Already Enough ✓
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-[var(--color-muted)]">
+            The Pot That Pays {sgd(cpfMonthly)}/Mth For Life (To Age 90) While Earning 4%. An
+            Estimate — Not CPF&apos;s Official Payout.
+          </p>
+        </div>
+
+        {/* ── SRS: standalone ── */}
+        <div className="lg:pl-6">
+          <h3 className="text-sm font-semibold">From Your SRS</h3>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="pt-srs-mth" className={labelCls}>Income Wanted ($/Mth)</label>
+              <NumberInput id="pt-srs-mth" min={0} step={100} value={srsMonthly}
+                onChange={setSrsMonthly} className={inputCls} aria-label="SRS monthly income wanted" />
+            </div>
+            <div>
+              <label htmlFor="pt-srs-age" className={labelCls}>From Age</label>
+              <NumberInput id="pt-srs-age" min={0} max={99} step={1} value={srsAge}
+                onChange={setSrsAge} className={inputCls} aria-label="SRS start age" />
+            </div>
+            <div>
+              <label htmlFor="pt-srs-yrs" className={labelCls}>Draw Over (Years)</label>
+              <NumberInput id="pt-srs-yrs" min={1} max={40} step={1} value={srsYears}
+                onChange={setSrsYears} className={inputCls} aria-label="SRS drawdown years" />
+            </div>
+            <div>
+              <label htmlFor="pt-srs-rate" className={labelCls}>Return (%/Yr)</label>
+              <NumberInput id="pt-srs-rate" min={0} max={20} step={0.5} value={srsRate}
+                onChange={setSrsRate} className={inputCls} aria-label="SRS assumed return" />
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl bg-[var(--color-surface-raised)] p-4">
+            <p className="text-xs text-[var(--color-muted)]">SRS You Need By Age {srsAge}</p>
+            <p className="mt-0.5 text-2xl font-bold tabular-nums text-[var(--color-primary)]">
+              {sgd(Math.round(srsNeeded))}
+            </p>
+          </div>
+          <p className="mt-3 text-xs text-[var(--color-muted)]">
+            The SRS Balance That Pays {sgd(srsMonthly)}/Mth For {srsYears} Years While Earning{" "}
+            {srsRate}%. SRS Is Penalty-Free From Age 64, And Spreading It Over 10 Years Keeps The Tax
+            Low.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

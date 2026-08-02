@@ -51,6 +51,17 @@
 }
 body { background: var(--color-bg); color: var(--color-fg); font-family: Arial, Helvetica, sans-serif; }
 
+/* Every word starts with a capital letter, app-wide. text-transform:capitalize
+   only uppercases each word's FIRST letter and leaves the rest as authored, so
+   acronyms are preserved (CPF stays CPF, OA stays OA — not Cpf/Oa) while
+   lowercase words like "your"/"of" become "Your"/"Of". */
+body { text-transform: capitalize; }
+/* Fields where capitalising the typed value would be wrong or confusing:
+   passwords, emails, and numeric inputs. */
+input[type="password"], input[type="email"], input[type="number"] {
+  text-transform: none;
+}
+
 /* Animated-icon motion */
 @keyframes floaty   { 0%,100% { transform: translateY(0); }      50% { transform: translateY(-3px); } }
 @keyframes pulseSoft{ 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.14); opacity: .82; } }
