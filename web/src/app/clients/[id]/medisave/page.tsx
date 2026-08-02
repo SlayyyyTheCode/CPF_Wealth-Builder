@@ -11,7 +11,7 @@ import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { getWhatIf, setWhatIf } from "@/lib/whatif";
+import { getWhatIf } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // MA earns the 4% floor rate.
@@ -28,18 +28,11 @@ export default function MedisavePage({
   const [owCeiling, setOwCeiling] = useState<number>(0);
   const [err, setErr] = useState<string | null>(null);
 
-  // Top-up what-if (yearly MA voluntary contribution from a chosen age)
+  // Read-only here: the MA top-up is edited in the Overview → What-If Scenario.
+  // We only READ the saved plan to render the preview chart below.
   const savedMa = useMemo(() => getWhatIf(Number(id)).ma, [id]);
-  const [topup, setTopup] = useState<number>(() => savedMa?.topup ?? 0);
+  const [topup] = useState<number>(() => savedMa?.topup ?? 0);
   const [topupAge, setTopupAge] = useState<number>(() => savedMa?.startAge ?? 0);
-  const [wiData, setWiData] = useState<
-    { age: number; baseline: number; withTopup: number; bhs: number }[] | null
-  >(null);
-
-  // Persist MA what-if params so the Overview can combine all accounts.
-  useEffect(() => {
-    setWhatIf(Number(id), { ma: { topup, startAge: topupAge } });
-  }, [id, topup, topupAge]);
 
   // Insurance drawdown calculator state
   const [maNow, setMaNow] = useState(0);          // current MA balance
@@ -75,7 +68,8 @@ export default function MedisavePage({
         if (r.result.years.length > 0) {
           setAge(r.result.years[0].age);
           setMaNow(Math.round(r.result.years[0].closing.MA));
-          setTopupAge(r.result.years[0].age);
+          // Only seed the top-up age if the saved plan hasn't set one.
+          setTopupAge((p) => (p > 0 ? p : r.result.years[0].age));
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -189,23 +183,19 @@ export default function MedisavePage({
     owCeiling > 0 ? owCeiling : member.monthly_gross_wage,
   );
 
-  // Yearly MA top-up from a chosen age, compounded at the MA floor (4%/yr).
-  // FV after k top-ups = topup * ((1+r)^k - 1)/r, k = years since the start age.
-  function runWhatIf() {
-    if (!medisave) return;
-    const data = years.map((y) => {
-      const k = y.age - topupAge + 1;
-      const fv = topup > 0 && k > 0 ? topup * (((1 + MA_RATE) ** k - 1) / MA_RATE) : 0;
-      const s = medisave.series.find((p) => p.age === y.age);
-      return {
-        age: y.age,
-        baseline: Math.round(y.closing.MA),
-        withTopup: Math.round(y.closing.MA + fv),
-        bhs: Math.round(s?.bhs ?? 0),
-      };
-    });
-    setWiData(data);
-  }
+  // Read-only preview of the saved plan (edited in the Overview). Yearly MA
+  // top-up from the chosen age, compounded at the MA floor (4%/yr).
+  const wiData = years.map((y) => {
+    const k = y.age - topupAge + 1;
+    const fv = topup > 0 && k > 0 ? topup * (((1 + MA_RATE) ** k - 1) / MA_RATE) : 0;
+    const s = medisave.series.find((p) => p.age === y.age);
+    return {
+      age: y.age,
+      baseline: Math.round(y.closing.MA),
+      withTopup: Math.round(y.closing.MA + fv),
+      bhs: Math.round(s?.bhs ?? 0),
+    };
+  });
 
   // Premium table — sampled every 10 years
   const premiumRows = medisave.premiums.filter((p) => p.age % 10 === 0);
@@ -523,50 +513,15 @@ export default function MedisavePage({
 
       {/* 8. Top-up what-if calculator */}
       <div className={`${cardClass} mb-4`}>
-        <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label htmlFor="ma-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Yearly MA top-up (S$)
-            </label>
-            <input
-              id="ma-topup"
-              type="number"
-              min={0}
-              step={1000}
-              value={topup || ""}
-              placeholder="0"
-              onChange={(e) => setTopup(Math.max(0, Number(e.target.value)))}
-              className={inputClass}
-              aria-label="Yearly MA top-up amount in Singapore dollars"
-            />
-          </div>
-          <div>
-            <label htmlFor="ma-topup-age" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Start at age
-            </label>
-            <input
-              id="ma-topup-age"
-              type="number"
-              min={ages[0]}
-              max={ages[ages.length - 1]}
-              step={1}
-              value={topupAge}
-              onChange={(e) => setTopupAge(Math.max(ages[0], Math.min(ages[ages.length - 1], Number(e.target.value))))}
-              className={inputClass}
-              aria-label="Age at which yearly top-ups begin"
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={runWhatIf}
-              className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
-              aria-label="Recalculate with yearly top-up"
-            >
-              Recalculate
-            </button>
-          </div>
-        </div>
+        <h3 className={`${labelClass} mb-2`}>Top-Up What-If</h3>
+        <p className="mb-3 text-sm text-[var(--color-muted)]">
+          Adjust Your MA Top-Up In The{" "}
+          <a href={`/clients/${id}`} className="font-semibold text-[var(--color-primary)] underline">
+            Overview → What-If Scenario
+          </a>
+          . This Chart Reflects The Plan You Set There
+          {topup > 0 ? <> — {sgd(topup)}/Yr From Age {topupAge}</> : <> (No MA Top-Up Set Yet)</>}.
+        </p>
 
         {wiData && (
           <div

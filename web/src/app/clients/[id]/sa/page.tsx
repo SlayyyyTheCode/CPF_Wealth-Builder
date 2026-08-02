@@ -14,11 +14,10 @@ import {
 import { simulate, getMember, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { SimResult, YearRow, Member } from "@/lib/types";
 import { YearScrubber } from "@/components/year-scrubber";
-import { NumberInput } from "@/components/number-input";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { getWhatIf, setWhatIf } from "@/lib/whatif";
+import { getWhatIf } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // retirement-account opening balance for a year (RA post-55, else SA).
@@ -35,6 +34,43 @@ function retBal(yr: YearRow): number {
 
 function retInt(yr: YearRow): number {
   return (yr.interest_by_account?.SA ?? 0) + (yr.interest_by_account?.RA ?? 0);
+}
+
+// Read-only preview of the saved SA plan (edited in the Overview): the SA top-up
+// and OA→SA transfer each run from their start age for `years` years, and both
+// stop once the balance reaches the FRS. Module-scope so the year-by-year
+// accumulator isn't a render-level mutation.
+const SA_RATE = 0.04;
+function saScenarioPreview(
+  rows: YearRow[],
+  proj: (base: number, year: number) => number,
+  frs: number,
+  ers: number,
+  p: { startAge: number; transferStartAge: number; yearsApplied: number; topup: number; transferAmt: number },
+) {
+  let extraEndPrev = 0;
+  let stopped = false;
+  return rows.map((y) => {
+    const extraStart = extraEndPrev;
+    let extraEnd = extraStart * (1 + SA_RATE);
+    if (!stopped) {
+      if (y.age >= p.startAge && y.age < p.startAge + p.yearsApplied) extraEnd += p.topup;
+      if (y.age >= p.transferStartAge && y.age < p.transferStartAge + p.yearsApplied) extraEnd += p.transferAmt;
+    }
+    const closing = retBal(y) + extraEnd;
+    const frsLine = Math.round(proj(frs, y.year));
+    if (closing >= frsLine) stopped = true; // reached FRS — stop adding
+    extraEndPrev = extraEnd;
+    return {
+      age: y.age,
+      baseline: retBal(y),
+      withTopup: closing,
+      opening: retBalOpening(y) + extraStart,
+      interest: retInt(y) + SA_RATE * extraStart,
+      frsLine,
+      ersLine: Math.round(proj(ers, y.year)),
+    };
+  });
 }
 
 // ── page ─────────────────────────────────────────────────────────────────────
@@ -58,27 +94,15 @@ export default function SaPage({
   // Scrubber — seed from warm cache so the page paints fully on tab switch.
   const [age, setAge] = useState<number | null>(() => peekSim(Number(id))?.result.years[0]?.age ?? null);
 
-  // Top-up what-if (yearly) — computed client-side. Both the SA top-up and the
-  // OA→SA transfer are applied every year from `startAge` for `yearsApplied`
-  // years, and stop automatically once the FRS is reached.
+  // Read-only here: the SA top-up + OA→SA transfer are edited in the Overview →
+  // What-If Scenario. We only READ the saved plan to render the preview below.
   const savedSa = useMemo(() => getWhatIf(Number(id)).sa, [id]);
-  const [topup, setTopup] = useState<number>(() => savedSa?.topup ?? 0);
-  const [transferAmt, setTransferAmt] = useState<number>(() => savedSa?.transfer ?? 0);
+  const [topup] = useState<number>(() => savedSa?.topup ?? 0);
+  const [transferAmt] = useState<number>(() => savedSa?.transfer ?? 0);
   const [startAge, setStartAge] = useState<number>(() => savedSa?.startAge ?? 0);           // top-up start
   const [transferStartAge, setTransferStartAge] = useState<number>(() => savedSa?.transferStartAge ?? 0); // transfer start
-  const [yearsApplied, setYearsApplied] = useState<number>(() => savedSa?.years ?? 40);
-
-  // Persist SA what-if params so the Overview can combine all accounts.
-  useEffect(() => {
-    setWhatIf(Number(id), { sa: { topup, transfer: transferAmt, startAge, transferStartAge, years: yearsApplied } });
-  }, [id, topup, transferAmt, startAge, transferStartAge, yearsApplied]);
-  const [wiData, setWiData] = useState<
-    {
-      age: number; baseline: number; withTopup: number;
-      opening: number; interest: number; frsLine: number; ersLine: number;
-    }[] | null
-  >(null);
-  const [wiAge, setWiAge] = useState<number>(0); // scenario scrubber
+  const [yearsApplied] = useState<number>(() => savedSa?.years ?? 40);
+  const [wiAge, setWiAge] = useState<number>(0); // scenario-preview scrubber
 
   useEffect(() => {
     let ok = true;
@@ -99,9 +123,13 @@ export default function SaPage({
         setBaseYear(Number(policy.effective_year) || new Date().getFullYear());
         setOwCeiling(Number(policy.ordinary_wage_ceiling) || 0);
         if (simRun.result.years.length > 0) {
-          setAge(simRun.result.years[0].age);
-          setStartAge(simRun.result.years[0].age);
-          setTransferStartAge(simRun.result.years[0].age);
+          const first = simRun.result.years[0].age;
+          setAge(first);
+          // Only seed start ages when the saved plan hasn't set them, so the
+          // read-only preview matches the ages chosen in the Overview.
+          setStartAge((p) => (p > 0 ? p : first));
+          setTransferStartAge((p) => (p > 0 ? p : first));
+          setWiAge(first);
         }
       })
       .catch((e) => ok && setErr((e as Error).message));
@@ -167,6 +195,11 @@ export default function SaPage({
   const baseFrsAge = years.find((y) => retBal(y) >= proj(frs, y.year))?.age ?? null;
   const baseErsAge = years.find((y) => retBal(y) >= proj(ers, y.year))?.age ?? null;
 
+  // Read-only preview of the saved plan (edited in the Overview).
+  const wiData = saScenarioPreview(years, proj, frs, ers, {
+    startAge, transferStartAge, yearsApplied, topup, transferAmt,
+  });
+
   // What-if scenario: hit ages + the KPI set for the selected scenario year.
   const wiFrsAge = wiData ? (wiData.find((d) => d.withTopup >= d.frsLine)?.age ?? null) : null;
   const wiErsAge = wiData ? (wiData.find((d) => d.withTopup >= d.ersLine)?.age ?? null) : null;
@@ -196,47 +229,7 @@ export default function SaPage({
   const labelClass =
     "text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]";
   const kpiClass = "mt-1 text-2xl font-bold tabular-nums";
-  const inputClass =
-    "rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm w-full";
 
-  // ── handlers ───────────────────────────────────────────────────────────────
-
-  // Yearly SA top-up, compounded at the SA floor rate (~4%/yr). Each year adds
-  // `topup`; value after k years = topup * (((1+r)^k - 1)/r). Estimate layered
-  // on the baseline projection.
-  const SA_RATE = 0.04;
-  // Iterate the extra SA/RA pot year by year. The yearly top-up runs from its
-  // start age, and the yearly OA→SA transfer runs from its own start age, each
-  // for `yearsApplied` years. Both STOP once the scenario balance reaches the
-  // FRS (top-ups/transfers aren't allowed past the FRS), which also makes any
-  // remaining "years applied" ineffective. The pot compounds at ~4%.
-  function runWhatIf() {
-    let extraEndPrev = 0;
-    let stopped = false;
-    const data = years.map((y) => {
-      const extraStart = extraEndPrev;
-      let extraEnd = extraStart * (1 + SA_RATE);
-      if (!stopped) {
-        if (y.age >= startAge && y.age < startAge + yearsApplied) extraEnd += topup;
-        if (y.age >= transferStartAge && y.age < transferStartAge + yearsApplied) extraEnd += transferAmt;
-      }
-      const closing = retBal(y) + extraEnd;
-      const frsLine = Math.round(proj(frs, y.year));
-      if (closing >= frsLine) stopped = true; // reached FRS — stop adding
-      extraEndPrev = extraEnd;
-      return {
-        age: y.age,
-        baseline: retBal(y),
-        withTopup: closing,
-        opening: retBalOpening(y) + extraStart,
-        interest: retInt(y) + SA_RATE * extraStart,
-        frsLine,
-        ersLine: Math.round(proj(ers, y.year)),
-      };
-    });
-    setWiData(data);
-    setWiAge(data[0]?.age ?? 0);
-  }
 
   // ── render ─────────────────────────────────────────────────────────────────
 
@@ -417,103 +410,20 @@ export default function SaPage({
       {/* 6. SA growth chart (memoised — unaffected by scrubber / calculator state) */}
       <SaBalanceChart years={years} frs={frs} ers={ers} sumRate={sumRate} baseYear={baseYear} cardClass={cardClass} labelClass={labelClass} />
 
-      {/* 7. Top-up what-if calculator */}
+      {/* 7. Top-up what-if — preview (edit in Overview) */}
       <div className={`${cardClass} mb-4`}>
-        <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <label htmlFor="sa-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Yearly SA top-up (S$)
-            </label>
-            <NumberInput
-              id="sa-topup"
-              min={0}
-              step={1000}
-              value={topup}
-              placeholder="0"
-              onChange={setTopup}
-              className={inputClass}
-              aria-label="Yearly SA top-up amount in Singapore dollars"
-            />
-          </div>
-          <div>
-            <label htmlFor="sa-start-age" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Top-up start at age
-            </label>
-            <NumberInput
-              id="sa-start-age"
-              min={0}
-              max={120}
-              step={1}
-              value={startAge}
-              onChange={setStartAge}
-              className={inputClass}
-              aria-label="Age at which the yearly SA top-up begins"
-            />
-          </div>
-          <div>
-            <label htmlFor="sa-years" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Years applied
-            </label>
-            <NumberInput
-              id="sa-years"
-              min={1}
-              max={80}
-              step={1}
-              value={yearsApplied}
-              onChange={setYearsApplied}
-              className={inputClass}
-              aria-label="How many years each lever is applied"
-            />
-          </div>
-          <div>
-            <label htmlFor="sa-transfer" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Yearly OA → SA transfer (S$)
-            </label>
-            <NumberInput
-              id="sa-transfer"
-              min={0}
-              step={1000}
-              value={transferAmt}
-              placeholder="0"
-              onChange={setTransferAmt}
-              className={inputClass}
-              aria-label="Yearly OA to SA transfer amount in Singapore dollars"
-            />
-          </div>
-          <div>
-            <label htmlFor="sa-transfer-start-age" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Transfer start at age
-            </label>
-            <NumberInput
-              id="sa-transfer-start-age"
-              min={0}
-              max={120}
-              step={1}
-              value={transferStartAge}
-              onChange={setTransferStartAge}
-              className={inputClass}
-              aria-label="Age at which the yearly OA to SA transfer begins"
-            />
-          </div>
-          <div className="hidden lg:block" />
-        </div>
-
-        <div className="mt-3 flex items-center gap-3">
-          <button
-            onClick={runWhatIf}
-            className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
-            aria-label="Recalculate with top-up and transfer"
-          >
-            Recalculate
-          </button>
-          <p className="text-xs text-[var(--color-muted)]">
-            <span className="font-medium">
-              Once your SA hits the Full Retirement Sum, you can&apos;t add any more.
-            </span>{" "}
-            Your balance still keeps growing at 4%.
-          </p>
-        </div>
+        <h3 className={`${labelClass} mb-2`}>Top-Up What-If</h3>
+        <p className="mb-3 text-sm text-[var(--color-muted)]">
+          Adjust Your SA Top-Up And OA → SA Transfer In The{" "}
+          <a href={`/clients/${id}`} className="font-semibold text-[var(--color-primary)] underline">
+            Overview → What-If Scenario
+          </a>
+          . This Chart Reflects The Plan You Set There.{" "}
+          <span className="font-medium">
+            Once Your SA Hits The Full Retirement Sum, You Can&apos;t Add More
+          </span>{" "}
+          — Your Balance Still Grows At 4%.
+        </p>
 
         {wiData && (
           <>

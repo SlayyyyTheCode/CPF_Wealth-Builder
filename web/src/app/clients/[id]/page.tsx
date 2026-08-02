@@ -27,12 +27,145 @@ const WhatIfScenarioChart = dynamic(
 import { PageHeading, OverviewIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { YearScrubber } from "@/components/year-scrubber";
+import { NumberInput } from "@/components/number-input";
 import { getMember, simulate, getActivePolicy, peekMember, peekSim } from "@/lib/api";
 import type { Member, SimResult, Balances } from "@/lib/types";
 import { sgd, sgdCompact } from "@/lib/format";
-import { buildScenario, getWhatIf } from "@/lib/whatif";
+import { buildScenario, getWhatIf, setWhatIf, OA_TOPUP_CAP } from "@/lib/whatif";
+import type { WhatIfParams } from "@/lib/whatif";
 
 const total = (b: Balances) => b.OA + b.SA + b.MA + b.RA;
+
+/* Consolidated top-up inputs for OA / SA / MA. Writes the same shared what-if
+   store the account tabs read, so nothing about the maths changes — this only
+   moves the controls into one place. */
+function TopUpPlanner({
+  whatIf, firstAge, inflow, onPatch,
+}: {
+  whatIf: WhatIfParams;
+  firstAge: number;
+  inflow: { OA: number; SA: number; MA: number; RA: number } | null;
+  onPatch: (patch: WhatIfParams) => void;
+}) {
+  const oaTopup = whatIf.oa?.topup ?? 0;
+  const oaStart = whatIf.oa?.startAge || firstAge;
+  const saTopup = whatIf.sa?.topup ?? 0;
+  const saStart = whatIf.sa?.startAge || firstAge;
+  const saTransfer = whatIf.sa?.transfer ?? 0;
+  const saTransferStart = whatIf.sa?.transferStartAge || firstAge;
+  const saYears = whatIf.sa?.years ?? 40;
+  const maTopup = whatIf.ma?.topup ?? 0;
+  const maStart = whatIf.ma?.startAge || firstAge;
+
+  // Each setter passes the WHOLE account slice, since the store merges at the
+  // account level — omitting a field would wipe it.
+  const setOa = (p: Partial<NonNullable<WhatIfParams["oa"]>>) =>
+    onPatch({ oa: { topup: oaTopup, startAge: oaStart, capPerYear: OA_TOPUP_CAP, ...p } });
+  const setSa = (p: Partial<NonNullable<WhatIfParams["sa"]>>) =>
+    onPatch({ sa: { topup: saTopup, transfer: saTransfer, startAge: saStart, transferStartAge: saTransferStart, years: saYears, ...p } });
+  const setMa = (p: Partial<NonNullable<WhatIfParams["ma"]>>) =>
+    onPatch({ ma: { topup: maTopup, startAge: maStart, ...p } });
+
+  const inCls = "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm";
+  const lblCls = "mb-1 block text-xs text-[var(--color-muted)]";
+  const yr = (n: number) => `${sgd(Math.round(n))}/Yr`;
+
+  return (
+    <div className="mt-4 rounded-xl bg-[var(--color-surface-raised)] p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+        Top-Up Planner
+      </p>
+      <div className="mt-3 grid gap-x-6 gap-y-5 lg:grid-cols-3 lg:divide-x lg:divide-[var(--color-border)]">
+        {/* OA */}
+        <div>
+          <h4 className="text-sm font-semibold">Ordinary Account (OA)</h4>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="tp-oa" className={lblCls}>Yearly Top-Up ($)</label>
+              <NumberInput id="tp-oa" min={0} max={OA_TOPUP_CAP} step={1000} value={Math.min(oaTopup, OA_TOPUP_CAP)}
+                onChange={(v) => setOa({ topup: Math.min(Math.max(v, 0), OA_TOPUP_CAP) })} className={inCls} aria-label="Yearly OA top-up" />
+            </div>
+            <div>
+              <label htmlFor="tp-oa-age" className={lblCls}>From Age</label>
+              <NumberInput id="tp-oa-age" min={0} max={120} step={1} value={oaStart}
+                onChange={(v) => setOa({ startAge: v })} className={inCls} aria-label="OA top-up start age" />
+            </div>
+          </div>
+          {inflow && (
+            <p className="mt-2 text-xs text-[var(--color-muted)]">
+              Salary + Employer: {yr(inflow.OA)} · Your Top-Up:{" "}
+              <span className="font-semibold text-[var(--color-primary)]">+{yr(oaTopup)}</span>
+            </p>
+          )}
+          <p className="mt-1 text-xs text-[var(--color-muted)]">Max {sgd(OA_TOPUP_CAP)}/Yr (What-If Only).</p>
+        </div>
+
+        {/* SA */}
+        <div className="lg:pl-6">
+          <h4 className="text-sm font-semibold">Special Account (SA)</h4>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="tp-sa" className={lblCls}>Yearly Top-Up ($)</label>
+              <NumberInput id="tp-sa" min={0} step={1000} value={saTopup}
+                onChange={(v) => setSa({ topup: Math.max(v, 0) })} className={inCls} aria-label="Yearly SA top-up" />
+            </div>
+            <div>
+              <label htmlFor="tp-sa-age" className={lblCls}>From Age</label>
+              <NumberInput id="tp-sa-age" min={0} max={120} step={1} value={saStart}
+                onChange={(v) => setSa({ startAge: v })} className={inCls} aria-label="SA top-up start age" />
+            </div>
+            <div>
+              <label htmlFor="tp-sa-xfer" className={lblCls}>OA → SA Transfer ($)</label>
+              <NumberInput id="tp-sa-xfer" min={0} step={1000} value={saTransfer}
+                onChange={(v) => setSa({ transfer: Math.max(v, 0) })} className={inCls} aria-label="Yearly OA to SA transfer" />
+            </div>
+            <div>
+              <label htmlFor="tp-sa-xfer-age" className={lblCls}>Transfer From Age</label>
+              <NumberInput id="tp-sa-xfer-age" min={0} max={120} step={1} value={saTransferStart}
+                onChange={(v) => setSa({ transferStartAge: v })} className={inCls} aria-label="OA to SA transfer start age" />
+            </div>
+            <div>
+              <label htmlFor="tp-sa-yrs" className={lblCls}>For (Years)</label>
+              <NumberInput id="tp-sa-yrs" min={1} max={60} step={1} value={saYears}
+                onChange={(v) => setSa({ years: Math.max(v, 1) })} className={inCls} aria-label="Years applied" />
+            </div>
+          </div>
+          {inflow && (
+            <p className="mt-2 text-xs text-[var(--color-muted)]">
+              Salary + Employer: {yr(inflow.SA + inflow.RA)} · Your Top-Up:{" "}
+              <span className="font-semibold text-[var(--color-primary)]">+{yr(saTopup)}</span>
+            </p>
+          )}
+          <p className="mt-1 text-xs text-[var(--color-muted)]">Stops Automatically At The FRS.</p>
+        </div>
+
+        {/* MA */}
+        <div className="lg:pl-6">
+          <h4 className="text-sm font-semibold">MediSave (MA)</h4>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor="tp-ma" className={lblCls}>Yearly Top-Up ($)</label>
+              <NumberInput id="tp-ma" min={0} step={1000} value={maTopup}
+                onChange={(v) => setMa({ topup: Math.max(v, 0) })} className={inCls} aria-label="Yearly MA top-up" />
+            </div>
+            <div>
+              <label htmlFor="tp-ma-age" className={lblCls}>From Age</label>
+              <NumberInput id="tp-ma-age" min={0} max={120} step={1} value={maStart}
+                onChange={(v) => setMa({ startAge: v })} className={inCls} aria-label="MA top-up start age" />
+            </div>
+          </div>
+          {inflow && (
+            <p className="mt-2 text-xs text-[var(--color-muted)]">
+              Salary + Employer: {yr(inflow.MA)} · Your Top-Up:{" "}
+              <span className="font-semibold text-[var(--color-primary)]">+{yr(maTopup)}</span>
+            </p>
+          )}
+          <p className="mt-1 text-xs text-[var(--color-muted)]">Shown In The MediSave Card Below.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 const atAge = (r: SimResult, age: number) => {
   const row = r.years.find(y => y.age === age);
   return row ? sgdCompact(total(row.closing)) : "—";
@@ -49,6 +182,9 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
   );
   const [scenAge, setScenAge] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // The Top-Up Planner edits these live. Seeded from the shared store so the
+  // account-tab charts and Overview stay in sync; every edit persists back.
+  const [whatIf, setWhatIfState] = useState<WhatIfParams>(() => getWhatIf(Number(id)));
 
   useEffect(() => {
     let ok = true;
@@ -69,6 +205,18 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
     return () => { ok = false; };
   }, [id]);
 
+  // Merge a patch into the what-if plan and persist it. Start ages default to
+  // `firstAge` when unset so a top-up entered here without a chosen age behaves
+  // like the account tabs (which seed the start age to the current age) rather
+  // than annuitising from age 0.
+  function patchWhatIf(patch: WhatIfParams) {
+    setWhatIfState((prev) => {
+      const next: WhatIfParams = { ...prev, ...patch };
+      setWhatIf(Number(id), patch);
+      return next;
+    });
+  }
+
   if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!member || !res)
@@ -83,11 +231,13 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
   const totalInterest = lifetimeInterest(res);
   const yearAt = (age: number) => res.years.find((y) => y.age === age)?.year;
 
-  // Combined what-if scenario, pulling each account's Top-up what-if params.
-  // Anchor the first (current-age) row to the member's real balances so
-  // "Original total" matches "Total CPF now" exactly (minus MA).
-  const scenRows = buildScenario(res.years, getWhatIf(Number(id)), frsInfo, member.balances);
+  // Combined what-if scenario from the live plan state (not a fresh store read),
+  // so the Top-Up Planner below updates the chart on every keystroke. Anchor the
+  // first (current-age) row to the member's real balances so "Current Amount"
+  // matches "Total CPF now" exactly (minus MA).
+  const scenRows = buildScenario(res.years, whatIf, frsInfo, member.balances);
   const ages = res.years.map((y) => y.age);
+  const firstAge = ages[0];
   const selAge = scenAge ?? ages[0];
   const selRow = scenRows.find((r) => r.age === selAge) ?? scenRows[0];
   const scenDelta = selRow ? selRow.scen - selRow.base : 0;
@@ -131,12 +281,22 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
       <section aria-label="What-if scenario" className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)]">
         <h3 className="text-sm font-semibold">What-If Scenario</h3>
         <p className="mt-1 text-xs text-[var(--color-muted)]">
-          Your CPF if you follow the plans set on the OA and SA tabs. Drag to any age.{" "}
-          <span className="font-semibold text-[var(--color-fg)]">MediSave isn&apos;t counted</span>{" "}
-          — it&apos;s for healthcare only, and has its own card below.
+          Plan Extra Top-Ups To Your OA, SA And MA All In One Place, And See The Combined Result.
+          Each Forecast Is Your <span className="font-semibold text-[var(--color-fg)]">Existing
+          Salary + Employer CPF Plus Your Top-Up</span> — Your Top-Ups Are Added On Top, Never
+          Instead.{" "}
+          <span className="font-semibold text-[var(--color-fg)]">MediSave Isn&apos;t Counted</span>{" "}
+          In The Total — It&apos;s For Healthcare Only, And Has Its Own Card Below.
         </p>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <TopUpPlanner
+          whatIf={whatIf}
+          firstAge={firstAge}
+          inflow={res.years[0]?.contribution_by_account ?? null}
+          onPatch={patchWhatIf}
+        />
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-[var(--color-surface-raised)] p-3">
             <p className="text-xs text-[var(--color-muted)]">Current Amount (w/o MA) (age {selAge})</p>
             <p className="mt-0.5 text-xl font-bold tabular-nums">{sgd(selRow?.base ?? 0)}</p>

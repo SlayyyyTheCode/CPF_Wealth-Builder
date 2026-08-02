@@ -49,22 +49,10 @@ export default function OaPage({
 
   // Top-up what-if (yearly OA voluntary contribution from a chosen age)
   const savedOa = useMemo(() => getWhatIf(Number(id)).oa, [id]);
-  const [topup, setTopup] = useState<number>(() => savedOa?.topup ?? 0);
+  // Read-only here: the OA top-up is edited in the Overview → What-If Scenario.
+  // We only READ the saved plan to render the preview chart below.
+  const [topup] = useState<number>(() => savedOa?.topup ?? 0);
   const [topupAge, setTopupAge] = useState<number>(() => savedOa?.startAge ?? 0);
-  const [wiData, setWiData] = useState<
-    { age: number; baseline: number; withTopup: number }[] | null
-  >(null);
-
-  // Persist OA what-if params so the Overview can combine all accounts.
-  useEffect(() => {
-    setWhatIf(Number(id), {
-      oa: { topup, startAge: topupAge, capPerYear: OA_TOPUP_CAP },
-    });
-  }, [id, topup, topupAge]);
-
-  // Hypothetical top-up: clamp to the cap on entry so no path can exceed it.
-  const setTopupCapped = (v: number) =>
-    setTopup(Math.min(Math.max(v, 0), OA_TOPUP_CAP));
 
   // CPFIS-OA investment what-if: keep N in the OA, invest everything above it.
   const savedInv = useMemo(() => getWhatIf(Number(id)).oaInvest, [id]);
@@ -120,7 +108,9 @@ export default function OaPage({
         if (r.result.years.length > 0) {
           const first = r.result.years[0].age;
           setAge(first);
-          setTopupAge(first);
+          // Only seed the top-up age if the saved plan hasn't set one, so the
+          // read-only preview reflects the age chosen in the Overview.
+          setTopupAge((p) => (p > 0 ? p : first));
           setMortgageAge(first);
           // Only seed the investment age if the user hasn't already set one.
           setInvAge((prev) => (prev > 0 ? prev : first));
@@ -223,21 +213,18 @@ export default function OaPage({
   const hasOaOverflow = maToOaYear > 0 || saToOaYear > 0 || oaToRaYear > 0;
   const cappedWage = Math.min(member.monthly_gross_wage, owCeiling > 0 ? owCeiling : member.monthly_gross_wage);
 
-  // Yearly OA top-up from a chosen age, compounded at the OA floor (~2.5%/yr).
-  // Estimate layered on the baseline projection; FV after k top-ups =
-  // topup * ((1+r)^k - 1)/r where k = years since the chosen start age.
-  function runWhatIf() {
-    const data = years.map((y) => {
-      const k = y.age - topupAge + 1; // number of yearly top-ups made by this age
-      const fv = topup > 0 && k > 0 ? topup * (((1 + OA_RATE) ** k - 1) / OA_RATE) : 0;
-      return {
-        age: y.age,
-        baseline: Math.round(y.closing.OA),
-        withTopup: Math.round(y.closing.OA + fv),
-      };
-    });
-    setWiData(data);
-  }
+  // Read-only preview of the saved plan (edited in the Overview). Yearly top-up
+  // from the chosen age, compounded at the OA floor (~2.5%/yr), layered on the
+  // baseline projection; FV after k top-ups = topup * ((1+r)^k - 1)/r.
+  const wiData = years.map((y) => {
+    const k = y.age - topupAge + 1;
+    const fv = topup > 0 && k > 0 ? topup * (((1 + OA_RATE) ** k - 1) / OA_RATE) : 0;
+    return {
+      age: y.age,
+      baseline: Math.round(y.closing.OA),
+      withTopup: Math.round(y.closing.OA + fv),
+    };
+  });
 
   // ── CPFIS-OA investment what-if (derived) ──────────────────────────────────
   // Hypothetical: the real $20k CPFIS floor is NOT enforced here (you asked for
@@ -616,54 +603,17 @@ export default function OaPage({
         </p>
       </div>
 
-      {/* 8. Top-up what-if calculator */}
+      {/* 8. Top-up what-if — preview (edit in Overview) */}
       <div className={`${cardClass} mb-4`}>
-        <h3 className={`${labelClass} mb-4`}>Top-up what-if calculator</h3>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label htmlFor="oa-topup" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Yearly OA top-up (S$)
-            </label>
-            <NumberInput
-              id="oa-topup"
-              min={0}
-              max={OA_TOPUP_CAP}
-              step={1000}
-              value={Math.min(topup, OA_TOPUP_CAP)}
-              placeholder="0"
-              onChange={setTopupCapped}
-              className={inputClass}
-              aria-label="Yearly OA top-up amount in Singapore dollars"
-            />
-            <p className="mt-1 text-xs text-[var(--color-muted)]">
-              Max {sgd(OA_TOPUP_CAP)}/yr (not the same as the salary cap above)
-            </p>
-          </div>
-          <div>
-            <label htmlFor="oa-topup-age" className="mb-1 block text-sm text-[var(--color-muted)]">
-              Start at age
-            </label>
-            <NumberInput
-              id="oa-topup-age"
-              min={0}
-              max={120}
-              step={1}
-              value={topupAge}
-              onChange={setTopupAge}
-              className={inputClass}
-              aria-label="Age at which yearly top-ups begin"
-            />
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={runWhatIf}
-              className="rounded-full bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-white"
-              aria-label="Recalculate with yearly top-up"
-            >
-              Recalculate
-            </button>
-          </div>
-        </div>
+        <h3 className={`${labelClass} mb-2`}>Top-Up What-If</h3>
+        <p className="mb-3 text-sm text-[var(--color-muted)]">
+          Adjust Your Top-Ups In The{" "}
+          <a href={`/clients/${id}`} className="font-semibold text-[var(--color-primary)] underline">
+            Overview → What-If Scenario
+          </a>
+          . This Chart Reflects The Plan You Set There
+          {topup > 0 ? <> — {sgd(topup)}/Yr From Age {topupAge}</> : <> (No OA Top-Up Set Yet)</>}.
+        </p>
 
         {wiData && (
           <div
