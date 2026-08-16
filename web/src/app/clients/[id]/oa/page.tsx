@@ -155,6 +155,33 @@ export default function OaPage({
     [years, mortgageByAge],
   );
 
+  // simulateOaSplit is a 55-year loop; memoise on the primitive inputs so it
+  // only recomputes when a value that actually feeds it changes — not on every
+  // scrubber drag or unrelated keystroke. Hooks stay above the early returns
+  // below. The voluntary top-up feeds the split too, so topped-up dollars are
+  // investable like any other OA dollar.
+  const splitRows = useMemo(
+    () => simulateOaSplit(
+      years,
+      { keepInOa: invKeep, startAge: invAge, ratePct: invRate, monthly: invMonthly },
+      { monthly: mortgageMth, startAge: mortgageAge },
+      undefined,
+      { topup, startAge: topupAge, capPerYear: OA_TOPUP_CAP },
+    ),
+    [years, invKeep, invAge, invRate, invMonthly, mortgageMth, mortgageAge, topup, topupAge],
+  );
+
+  // Inflation-adjusted (today's dollars) view of the same two lines. Memoised so
+  // the second chart's `data` keeps a stable identity between unrelated renders.
+  const realRows = useMemo(
+    () => splitRows.map((r) => ({
+      age: r.age,
+      realOnly: realValue(r.totalOnly, invInflation, r.age - invAge),
+      realSplit: realValue(r.totalSplit, invInflation, r.age - invAge),
+    })),
+    [splitRows, invInflation, invAge],
+  );
+
   if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!res || !member || age === null)
@@ -248,13 +275,6 @@ export default function OaPage({
       ? Math.min(maToOaStart, saToOaStart)
       : maToOaStart ?? saToOaStart;
 
-  const invMortgage = { monthly: mortgageMth, startAge: mortgageAge };
-  const invParams = { keepInOa: invKeep, startAge: invAge, ratePct: invRate, monthly: invMonthly };
-  // The voluntary top-up feeds the split too, so topped-up dollars are
-  // investable like any other OA dollar.
-  const invTopup = { topup, startAge: topupAge, capPerYear: OA_TOPUP_CAP };
-  const splitRows = simulateOaSplit(years, invParams, invMortgage, undefined, invTopup);
-
   // The OA available to split is the year's CLOSING balance from "Start/End
   // Account of the Year" — i.e. AFTER the housing mortgage has taken its cut,
   // and after interest. Reading the raw engine balance instead would offer up
@@ -294,12 +314,6 @@ export default function OaPage({
   const splitGap = splitSel ? splitSel.totalSplit - splitSel.totalOnly : 0;
   const swept = splitSel ? splitSel.raOnly > 0 || splitSel.raSplit > 0 : false;
 
-  // Inflation-adjusted (today's dollars) view of the same two lines.
-  const realRows = splitRows.map((r) => ({
-    age: r.age,
-    realOnly: realValue(r.totalOnly, invInflation, r.age - invAge),
-    realSplit: realValue(r.totalSplit, invInflation, r.age - invAge),
-  }));
   const realSel = realRows.find((r) => r.age === viewAge) ?? realRows[realRows.length - 1] ?? null;
 
   // Real-world CPFIS guidance (informational, not enforced).

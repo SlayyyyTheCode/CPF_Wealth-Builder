@@ -1,5 +1,5 @@
 "use client";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { KpiCard } from "@/components/kpi-card";
 import { ReadinessRing } from "@/components/readiness-ring";
@@ -217,6 +217,18 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
     });
   }
 
+  // Combined what-if scenario from the live plan state (not a fresh store read),
+  // so the Top-Up Planner updates the chart on every keystroke. Anchored to the
+  // member's real balances at the current age. Memoised on the plan + policy so
+  // dragging the year scrubber (which only moves `scenAge`) doesn't rerun the
+  // whole scenario, and the chart keeps a stable `rows` identity. Stays above
+  // the early returns below — hooks must run on every render — and guards the
+  // still-loading case internally.
+  const scenRows = useMemo(
+    () => (res && member ? buildScenario(res.years, whatIf, frsInfo, member.balances) : []),
+    [res, member, whatIf, frsInfo],
+  );
+
   if (err) return <ErrorState message={err} onRetry={() => location.reload()} />;
 
   if (!member || !res)
@@ -231,11 +243,6 @@ export default function ClientDashboard({ params }: { params: Promise<{ id: stri
   const totalInterest = lifetimeInterest(res);
   const yearAt = (age: number) => res.years.find((y) => y.age === age)?.year;
 
-  // Combined what-if scenario from the live plan state (not a fresh store read),
-  // so the Top-Up Planner below updates the chart on every keystroke. Anchor the
-  // first (current-age) row to the member's real balances so "Current Amount"
-  // matches "Total CPF now" exactly (minus MA).
-  const scenRows = buildScenario(res.years, whatIf, frsInfo, member.balances);
   const ages = res.years.map((y) => y.age);
   const firstAge = ages[0];
   const selAge = scenAge ?? ages[0];
