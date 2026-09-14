@@ -1,6 +1,6 @@
 from datetime import datetime, UTC
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -80,7 +80,7 @@ async def ingest(
 
 
 @router.get("/active", response_model=PolicySnapshotOut)
-def get_active(year: int, db: Session = Depends(get_db)):
+def get_active(year: int, response: Response, db: Session = Depends(get_db)):
     snap = db.scalars(
         select(PolicySnapshot).where(
             PolicySnapshot.effective_year == year,
@@ -89,6 +89,11 @@ def get_active(year: int, db: Session = Depends(get_db)):
     ).first()
     if not snap:
         raise HTTPException(404, f"No active policy for {year}")
+    # Public, immutable-until-admin-approval reference data. Let Vercel's edge
+    # cache serve repeat reads without hitting the function/DB at all: fresh for
+    # 5 min, then served stale (instantly) for up to a day while one request
+    # revalidates in the background. An admin approval propagates within ~5 min.
+    response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=86400"
     return snap
 
 
