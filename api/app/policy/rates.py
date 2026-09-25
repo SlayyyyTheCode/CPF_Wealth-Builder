@@ -30,6 +30,9 @@ CONTRIBUTION_2026 = {
 }
 
 # Allocation ratios from Jan-2026 CPF file. "SAorRA" = SA (<55) or RA (55+).
+# Verified 2026-09-25 against CPF's official "CPF Allocation Rates from 1 January
+# 2026" table (cpf.gov.sg/.../CPFAllocationRatesfromJanuary2026.pdf) — all 8 bands
+# match exactly.
 ALLOCATION_2026 = {
     "<=35":  {"OA": 0.6217, "SAorRA": 0.1621, "MA": 0.2162},
     "35-45": {"OA": 0.5677, "SAorRA": 0.1891, "MA": 0.2432},
@@ -39,4 +42,25 @@ ALLOCATION_2026 = {
     "60-65": {"OA": 0.1400, "SAorRA": 0.4400, "MA": 0.4200},
     "65-70": {"OA": 0.0607, "SAorRA": 0.3030, "MA": 0.6363},
     ">70":   {"OA": 0.0800, "SAorRA": 0.0800, "MA": 0.8400},
+}
+
+
+# ── 1 January 2027 senior-worker step-up ─────────────────────────────────────
+# Source (fetched + text-extracted 2026-09-25 from CPF's own PDFs):
+#   contribution: cpf.gov.sg/.../jan2027cpfcontributionrates.pdf  (Table 1)
+#   allocation:   cpf.gov.sg/.../jan2027cpfallocationrates.pdf
+# Only two bands change. The whole increase (1.5% of wages at 55-60, 1.0% at
+# 60-65) is allocated to the Retirement Account, up to the FRS; once the RA holds
+# the FRS the contribution is channelled to the OA instead (apply_saorra already
+# routes that way). Every other band is identical to 2026.
+CONTRIBUTION_2027 = {
+    **CONTRIBUTION_2026,
+    "55-60": 0.355,   # 34%   -> 35.5%  (employer 16.5%, employee 19%)
+    "60-65": 0.26,    # 25%   -> 26%    (employer 13%,   employee 13%)
+}
+
+ALLOCATION_2027 = {
+    **ALLOCATION_2026,
+    "55-60": {"OA": 0.3382, "SAorRA": 0.3661, "MA": 0.2957},
+    "60-65": {"OA": 0.1347, "SAorRA": 0.4615, "MA": 0.4038},
 }

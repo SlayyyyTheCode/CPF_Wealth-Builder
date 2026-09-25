@@ -81,14 +81,27 @@ async def ingest(
 
 @router.get("/active", response_model=PolicySnapshotOut)
 def get_active(year: int, response: Response, db: Session = Depends(get_db)):
+    # Policy CARRIES FORWARD: use the newest active snapshot whose effective_year
+    # is <= the requested year — the same rule the simulation resolver applies.
+    # This used to demand an EXACT-year snapshot, and the frontend asks for the
+    # current calendar year, so on 1 January of any year without its own approved
+    # snapshot every page that loads policy would have 404'd. The frontend grows
+    # the retirement sums from the returned effective_year, so serving the prior
+    # year's snapshot stays self-consistent. If the request predates every
+    # snapshot, fall back to the earliest (again matching the resolver); 404 only
+    # when there is no active policy at all.
+    base = select(PolicySnapshot).where(PolicySnapshot.status == "active")
     snap = db.scalars(
-        select(PolicySnapshot).where(
-            PolicySnapshot.effective_year == year,
-            PolicySnapshot.status == "active",
-        )
+        base.where(PolicySnapshot.effective_year <= year)
+        .order_by(PolicySnapshot.effective_year.desc(), PolicySnapshot.id.desc())
+        .limit(1)
     ).first()
+    if snap is None:
+        snap = db.scalars(
+            base.order_by(PolicySnapshot.effective_year.asc(), PolicySnapshot.id.desc()).limit(1)
+        ).first()
     if not snap:
-        raise HTTPException(404, f"No active policy for {year}")
+        raise HTTPException(404, "No active policy snapshot")
     # Public, immutable-until-admin-approval reference data. Let Vercel's edge
     # cache serve repeat reads without hitting the function/DB at all: fresh for
     # 5 min, then served stale (instantly) for up to a day while one request
