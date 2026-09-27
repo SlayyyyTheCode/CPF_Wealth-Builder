@@ -78,3 +78,35 @@ def test_invalid_token_rejected_on_delete(client, anon_client):
         f"/members/{mid}", headers={"Authorization": "Bearer garbage.token.here"}
     )
     assert r.status_code == 401
+
+
+def test_admin_login_locks_out_after_repeated_failures(anon_client):
+    # DB-backed (app/models/auth_attempt.py AdminLoginAttempt), not the
+    # general in-memory rate limiter — that resets per serverless container,
+    # so it alone wouldn't reliably stop a brute-force attempt in production.
+    for _ in range(5):
+        r = anon_client.post("/auth/login", json={"username": "useradmin", "password": "wrong"})
+        assert r.status_code == 401
+    r = anon_client.post("/auth/login", json={"username": "useradmin", "password": "wrong"})
+    assert r.status_code == 429
+    # Even the correct password is locked out until the window clears.
+    r = anon_client.post("/auth/login", json={"username": "useradmin", "password": "P@ssw0rd2022"})
+    assert r.status_code == 429
+
+
+def test_admin_login_success_clears_the_fail_counter(anon_client):
+    for _ in range(4):
+        assert anon_client.post(
+            "/auth/login", json={"username": "useradmin", "password": "wrong"}
+        ).status_code == 401
+    ok = anon_client.post("/auth/login", json={"username": "useradmin", "password": "P@ssw0rd2022"})
+    assert ok.status_code == 200
+    # A fresh run of failures afterward should start counting from zero again,
+    # not pick up where the pre-success failures left off.
+    for _ in range(4):
+        assert anon_client.post(
+            "/auth/login", json={"username": "useradmin", "password": "wrong"}
+        ).status_code == 401
+    assert anon_client.post(
+        "/auth/login", json={"username": "useradmin", "password": "P@ssw0rd2022"}
+    ).status_code == 200

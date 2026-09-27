@@ -36,3 +36,19 @@ Index(
     PasswordAttempt.member_id,
     PasswordAttempt.created_at,
 )
+
+
+class AdminLoginAttempt(Base):
+    """One row per FAILED admin login attempt — same rationale as
+    PasswordAttempt above (DB-backed so the throttle survives a serverless
+    cold container). Global rather than per-member: there is exactly one
+    admin credential, so a single shared counter is both simpler and
+    strictly stricter (it also catches a distributed, multi-IP attack that a
+    per-IP limit would not)."""
+
+    __tablename__ = "admin_login_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), index=True
+    )
