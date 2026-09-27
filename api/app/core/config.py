@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # leaks. The frontend additionally auto-locks after 30 min of inactivity.
     MEMBER_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # --- Observability (optional) ---
+    # Blank = disabled. See app/core/logging.py.
+    SENTRY_DSN: str = ""
+
+    # --- Rate limiting ---
+    # Per-client-IP, applies to every route by default (see app/core/limiter.py).
+    # Auth login attempts have their own, stricter, DB-backed lockout on top of this.
+    RATE_LIMIT_DEFAULT: str = "120/minute"
+
     @field_validator("DATABASE_URL")
     @classmethod
     def _use_psycopg3_driver(cls, v: str) -> str:

@@ -11,11 +11,8 @@ import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, MedisaveIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { getWhatIf } from "@/lib/whatif";
+import { getWhatIf, MA_RATE } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
-
-// MA earns the 4% floor rate.
-const MA_RATE = 0.04;
 
 export default function MedisavePage({
   params,

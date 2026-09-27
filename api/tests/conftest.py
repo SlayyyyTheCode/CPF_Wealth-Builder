@@ -16,6 +16,16 @@ import app.models.auth_attempt  # noqa: F401  (register table)
 from app.policy.seed import SEED_2026
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """The Limiter (app/core/limiter.py) is a module-level singleton shared
+    across the whole test session — without a reset, request counts from one
+    test would carry into the next and eventually trip a false 429."""
+    from app.core.limiter import limiter
+    limiter.reset()
+    yield
+
+
 @pytest.fixture
 def db_session():
     engine = create_engine(

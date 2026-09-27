@@ -9,11 +9,9 @@ import { PageHeading, MillionaireIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { useAdmin } from "@/lib/admin";
 import { sgd, sgdCompact } from "@/lib/format";
-import { buildScenario, getWhatIf } from "@/lib/whatif";
+import { buildScenario, getWhatIf, OA_RATE, SA_RATE as RA_RATE } from "@/lib/whatif";
 
 // ── CPF constants (mirror api/app/engines: interest.py / cpflife.py) ──────────
-const OA_RATE = 0.025;
-const RA_RATE = 0.04;
 const LONGEVITY = 90;
 
 type Plan = "Standard" | "Escalating";

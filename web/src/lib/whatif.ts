@@ -3,6 +3,11 @@
 // zero amounts mean "use the baseline projection" for that account.
 import type { YearRow } from "@/lib/types";
 
+// Base interest floors (mirrors api/app/policy/seed.py's interest_rates.base).
+// These are structural CPF facts, not a value that moves with a policy
+// version the way BHS/FRS/ERS or contribution rates do — the oa/sa/medisave/
+// millionaire pages import from here rather than re-declaring their own copy,
+// so there is exactly one place to update if that ever changes.
 export const OA_RATE = 0.025;
 export const SA_RATE = 0.04;
 export const MA_RATE = 0.04;

@@ -1,17 +1,34 @@
+import logging
 import time
+import uuid
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.limiter import limiter
+from app.core.logging import init_sentry, setup_logging, timed_ms
 from app.db.session import get_db
+
+logger = logging.getLogger("app.request")
 
 
 def create_app() -> FastAPI:
+    setup_logging()
+    sentry_enabled = init_sentry()
+
     app = FastAPI(title="CPF Builder API")
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    # Blanket per-IP rate limit on every route (see app/core/limiter.py) — on
+    # top of, not instead of, the DB-backed lockout on admin/member login.
+    app.add_middleware(SlowAPIMiddleware)
     # Simulation/analysis responses are large JSON (60+ projection years of
     # nested balances); gzip cuts them ~10x on the wire, the single biggest
     # latency win for remote users on slow links.
@@ -24,6 +41,44 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        """One structured log line per request, plus a full traceback for
+        anything unhandled — before this, an uncaught exception surfaced only
+        as a bare 500 to the client with nothing recorded anywhere. Kept as a
+        single middleware (not a separate exception_handler) so it can't
+        accidentally shadow FastAPI's own HTTPException/validation handling."""
+        request_id = uuid.uuid4().hex[:12]
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(
+                "unhandled exception",
+                extra={"request_id": request_id, "method": request.method, "path": request.url.path},
+            )
+            raise
+        level = logging.WARNING if response.status_code >= 500 else logging.INFO
+        logger.log(
+            level,
+            "request",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": timed_ms(start),
+            },
+        )
+        response.headers["X-Request-Id"] = request_id
+        return response
+
+    @app.get("/health/observability")
+    def health_observability():
+        """Confirms whether logging/Sentry are actually wired, without
+        leaking the DSN itself."""
+        return {"structured_logging": True, "sentry_enabled": sentry_enabled}
 
     @app.get("/health")
     def health():

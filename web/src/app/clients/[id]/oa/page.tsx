@@ -13,10 +13,8 @@ import { sgd } from "@/lib/format";
 import {
   getWhatIf, setWhatIf, simulateOaSplit, realValue,
   CPFIS_OA_FLOOR, CPFIS_STOCK_LIMIT, CPFIS_GOLD_LIMIT, OA_TOPUP_CAP,
+  OA_RATE,
 } from "@/lib/whatif";
-
-// OA base interest floor.
-const OA_RATE = 0.025;
 
 // Stable identity for the "still loading" case — a fresh [] each render would
 // invalidate the memos below on every pass.

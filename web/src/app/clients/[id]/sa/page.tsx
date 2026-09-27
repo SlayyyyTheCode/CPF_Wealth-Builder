@@ -17,7 +17,7 @@ import { YearScrubber } from "@/components/year-scrubber";
 import { PageHeading, SavingsIcon, RocketIcon } from "@/components/icons";
 import { ErrorState } from "@/components/error-state";
 import { sgd } from "@/lib/format";
-import { getWhatIf } from "@/lib/whatif";
+import { getWhatIf, SA_RATE } from "@/lib/whatif";
 import { extraInterestByAccount } from "@/lib/extra-interest";
 
 // retirement-account opening balance for a year (RA post-55, else SA).
@@ -40,7 +40,6 @@ function retInt(yr: YearRow): number {
 // and OA→SA transfer each run from their start age for `years` years, and both
 // stop once the balance reaches the FRS. Module-scope so the year-by-year
 // accumulator isn't a render-level mutation.
-const SA_RATE = 0.04;
 function saScenarioPreview(
   rows: YearRow[],
   proj: (base: number, year: number) => number,
